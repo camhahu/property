@@ -1,0 +1,17 @@
+{
+    "name": "holds",
+    "type": "module",
+    "module": "index.ts",
+    "scripts": {
+        "lint": "oxlint --fix",
+        "fmt": "oxfmt --write"
+    },
+    "devDependencies": {
+        "@types/bun": "latest",
+        "oxfmt": "^0.45.0",
+        "oxlint": "^1.60.0"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    }
+}

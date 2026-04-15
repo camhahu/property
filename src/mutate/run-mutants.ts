@@ -11,7 +11,7 @@ import { applyMutation, createCandidates, type MutationCandidate } from "./candi
 type MutationRunRequest = {
     analyzedSpec: AnalyzedSpec;
     candidate: MutationCandidate;
-    definition: SpecDefinition<unknown[], unknown>;
+    definition: SpecDefinition<unknown, unknown>;
     id: string;
     sourceText: string;
 };
@@ -60,7 +60,7 @@ async function runMutantCandidate({
     const propertyResult = await runPropertySuite({
         analyzedSpec,
         definition,
-        numRuns: 100,
+        numRuns: 250,
         target: mutatedTarget,
     });
 
@@ -74,7 +74,7 @@ async function runMutantCandidate({
 
 export async function runMutants(
     analyzedSpec: AnalyzedSpec,
-    definition: SpecDefinition<unknown[], unknown>,
+    definition: SpecDefinition<unknown, unknown>,
 ): Promise<MutationResult[]> {
     const { candidates, sourceText } = await loadMutationState(analyzedSpec);
     const results: MutationResult[] = [];

@@ -7,6 +7,16 @@ export type LawSource = {
     snippet: string;
 };
 
+type ArgumentDescriptor = {
+    index: number;
+    label: string;
+};
+
+type BuilderCall = {
+    call: ts.CallExpression;
+    name: string;
+};
+
 function isExported(statement: ts.VariableStatement): boolean {
     return Boolean(
         statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
@@ -37,6 +47,149 @@ function getSpecCallFromVariable(statement: ts.VariableStatement): ts.CallExpres
         .find(isSpecCallOrUndefined);
 }
 
+function getBuilderFunction(specCall: ts.CallExpression): ts.FunctionLikeDeclaration {
+    const [, builder] = specCall.arguments;
+
+    if (!builder || (!ts.isArrowFunction(builder) && !ts.isFunctionExpression(builder))) {
+        throw new Error("spec() must receive a builder callback as its second argument.");
+    }
+
+    return builder;
+}
+
+function getBuilderStatements(builder: ts.FunctionLikeDeclaration): ts.Statement[] {
+    if (!builder.body || !ts.isBlock(builder.body)) {
+        throw new Error("spec() builder callbacks must use a block body.");
+    }
+
+    return [...builder.body.statements];
+}
+
+function getStringArgument(call: ts.CallExpression, descriptor: ArgumentDescriptor): string {
+    const argument = call.arguments[descriptor.index];
+
+    if (!argument || !ts.isStringLiteral(argument)) {
+        throw new Error(`${descriptor.label} must be a string literal.`);
+    }
+
+    return argument.text;
+}
+
+function getObjectArgument(
+    call: ts.CallExpression,
+    descriptor: ArgumentDescriptor,
+): ts.ObjectLiteralExpression {
+    const argument = call.arguments[descriptor.index];
+
+    if (!argument || !ts.isObjectLiteralExpression(argument)) {
+        throw new Error(`${descriptor.label} must be an object literal.`);
+    }
+
+    return argument;
+}
+
+function getCallbackArgument(call: ts.CallExpression, index: number): ts.FunctionLikeDeclaration {
+    const argument = call.arguments[index];
+
+    if (!argument || (!ts.isArrowFunction(argument) && !ts.isFunctionExpression(argument))) {
+        throw new Error("section() must receive a callback.");
+    }
+
+    return argument;
+}
+
+function addLawEntry({
+    entries,
+    groups,
+    objectLiteral,
+    sourceFile,
+    lawName,
+}: {
+    entries: Record<string, LawSource>;
+    groups: string[];
+    objectLiteral: ts.ObjectLiteralExpression;
+    sourceFile: ts.SourceFile;
+    lawName: string;
+}): void {
+    const { character, line } = sourceFile.getLineAndCharacterOfPosition(
+        objectLiteral.getStart(sourceFile),
+    );
+    const fullName = groups.length > 0 ? `${groups.join(" / ")} / ${lawName}` : lawName;
+
+    entries[fullName] = {
+        location: `${path.relative(process.cwd(), sourceFile.fileName)}:${line + 1}:${character + 1}`,
+        snippet: objectLiteral.getText(sourceFile),
+    };
+}
+
+function getBuilderCall(statement: ts.Statement): BuilderCall | undefined {
+    if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) {
+        return undefined;
+    }
+
+    return ts.isIdentifier(statement.expression.expression)
+        ? { call: statement.expression, name: statement.expression.expression.text }
+        : undefined;
+}
+
+function visitBuilderCall({
+    call,
+    entries,
+    groups,
+    name,
+    sourceFile,
+}: {
+    call: ts.CallExpression;
+    entries: Record<string, LawSource>;
+    groups: string[];
+    name: string;
+    sourceFile: ts.SourceFile;
+}): void {
+    if (name === "law") {
+        addLawEntry({
+            entries,
+            groups,
+            objectLiteral: getObjectArgument(call, { index: 1, label: "law definition" }),
+            sourceFile,
+            lawName: getStringArgument(call, { index: 0, label: "law name" }),
+        });
+        return;
+    }
+
+    if (name !== "section") {
+        return;
+    }
+
+    walkBuilderStatements({
+        entries,
+        groups: [...groups, getStringArgument(call, { index: 0, label: "section name" })],
+        sourceFile,
+        statements: getBuilderStatements(getCallbackArgument(call, 1)),
+    });
+}
+
+function walkBuilderStatements({
+    entries,
+    groups,
+    sourceFile,
+    statements,
+}: {
+    entries: Record<string, LawSource>;
+    groups: string[];
+    sourceFile: ts.SourceFile;
+    statements: ts.Statement[];
+}): void {
+    for (const statement of statements) {
+        const builderCall = getBuilderCall(statement);
+
+        if (!builderCall) {
+            continue;
+        }
+
+        visitBuilderCall({ ...builderCall, entries, groups, sourceFile });
+    }
+}
+
 export function getExportedSpecCall(sourceFile: ts.SourceFile): ts.CallExpression {
     const exportAssignment = sourceFile.statements
         .filter(ts.isExportAssignment)
@@ -59,16 +212,8 @@ export function getExportedSpecCall(sourceFile: ts.SourceFile): ts.CallExpressio
     throw new Error(`No exported spec(...) call found in ${sourceFile.fileName}`);
 }
 
-function getPropertyName(propertyName: ts.PropertyName): string {
-    if (ts.isIdentifier(propertyName) || ts.isStringLiteral(propertyName)) {
-        return propertyName.text;
-    }
-
-    throw new Error("Only identifier and string literal law names are supported.");
-}
-
-function getTargetExpression(specCall: ts.CallExpression): ts.Identifier {
-    const [targetExpression] = specCall.arguments;
+function getTargetExpression(sourceFile: ts.SourceFile): ts.Identifier {
+    const [targetExpression] = getExportedSpecCall(sourceFile).arguments;
 
     if (!targetExpression || !ts.isIdentifier(targetExpression)) {
         throw new Error("spec() must receive a direct function identifier as its first argument.");
@@ -77,18 +222,8 @@ function getTargetExpression(specCall: ts.CallExpression): ts.Identifier {
     return targetExpression;
 }
 
-function getLawObject(specCall: ts.CallExpression): ts.ObjectLiteralExpression {
-    const [, lawObject] = specCall.arguments;
-
-    if (!lawObject || !ts.isObjectLiteralExpression(lawObject)) {
-        throw new Error("spec() must receive a law object as its second argument.");
-    }
-
-    return lawObject;
-}
-
 export function getTargetSymbol(checker: ts.TypeChecker, sourceFile: ts.SourceFile): ts.Symbol {
-    const targetExpression = getTargetExpression(getExportedSpecCall(sourceFile));
+    const targetExpression = getTargetExpression(sourceFile);
     const symbol = checker.getSymbolAtLocation(targetExpression);
 
     if (!symbol) {
@@ -99,24 +234,14 @@ export function getTargetSymbol(checker: ts.TypeChecker, sourceFile: ts.SourceFi
 }
 
 export function getLawSources(sourceFile: ts.SourceFile): Record<string, LawSource> {
-    const lawObject = getLawObject(getExportedSpecCall(sourceFile));
     const entries: Record<string, LawSource> = {};
 
-    for (const property of lawObject.properties) {
-        if (!ts.isPropertyAssignment(property)) {
-            throw new Error("Only property assignments are supported in spec law objects.");
-        }
-
-        const name = getPropertyName(property.name);
-        const { character, line } = sourceFile.getLineAndCharacterOfPosition(
-            property.getStart(sourceFile),
-        );
-
-        entries[name] = {
-            location: `${path.relative(process.cwd(), sourceFile.fileName)}:${line + 1}:${character + 1}`,
-            snippet: property.initializer.getText(sourceFile),
-        };
-    }
+    walkBuilderStatements({
+        entries,
+        groups: [],
+        sourceFile,
+        statements: getBuilderStatements(getBuilderFunction(getExportedSpecCall(sourceFile))),
+    });
 
     return entries;
 }

@@ -1,24 +1,13 @@
-import type {
-    Awaitable,
-    Given,
-    InputContext,
-    Law,
-    LawContext,
-    LawDefinition,
-    NamedInputs,
-    StructuredLaw,
-} from "../public/spec.ts";
-import { toNamedInputs } from "../runtime/named-values.ts";
+import type { Awaitable, Given, InputContext, LawContext, LawDefinition } from "../public/spec.ts";
 import { createDependencyBag } from "./dependencies.ts";
 import type { CallTrace, FailureDetails } from "./types.ts";
 
-type LawExecution<TArgs extends unknown[], TResult> = {
+type LawExecution<TInput, TResult> = {
     dependencyArgumentNames: Record<string, string[]>;
     dependencyParameterName?: string;
-    given: Given<TArgs>;
-    inputNames: string[];
-    inputs: TArgs;
-    law: LawDefinition<TArgs, TResult>;
+    given: Given<TInput>;
+    input: TInput;
+    law: LawDefinition<TInput, TResult> & { name: string };
     target: (...inputs: unknown[]) => Awaitable<TResult>;
 };
 
@@ -32,126 +21,88 @@ class LawFailure extends Error {
     }
 }
 
-function toInputContext<TArgs extends unknown[]>(
-    inputNames: string[],
-    inputs: TArgs,
-): InputContext<TArgs> {
-    return {
-        inputs: toNamedInputs(inputNames, inputs) as NamedInputs<TArgs>,
-        values: inputs,
-    };
+function toInputContext<TInput>(input: TInput): InputContext<TInput> {
+    return { input };
 }
 
-function isStructuredLaw<TArgs extends unknown[], TResult>(
-    law: LawDefinition<TArgs, TResult>,
-): law is StructuredLaw<TArgs, TResult> {
-    return typeof law !== "function";
-}
-
-async function shouldSkipLaw<TArgs extends unknown[], TResult>({
-    inputNames,
-    inputs,
+async function shouldSkipLaw<TInput, TResult>({
+    input,
     law,
-}: Pick<LawExecution<TArgs, TResult>, "inputNames" | "inputs" | "law">): Promise<boolean> {
-    return isStructuredLaw(law) && law.when
-        ? !(await law.when(toInputContext(inputNames, inputs)))
-        : false;
+}: Pick<LawExecution<TInput, TResult>, "input" | "law">): Promise<boolean> {
+    return law.where ? !(await law.where(toInputContext(input))) : false;
 }
 
-function getAssertion<TArgs extends unknown[], TResult>(
-    law: LawDefinition<TArgs, TResult>,
-): Law<TArgs, TResult> {
-    return isStructuredLaw(law) ? law.assert : law;
+export function getGiven<TInput, TResult>(law: LawDefinition<TInput, TResult>): Given<TInput> {
+    return law.given ?? {};
 }
 
-export function getGiven<TArgs extends unknown[], TResult>(
-    law: LawDefinition<TArgs, TResult>,
-): Given<TArgs> {
-    return isStructuredLaw(law) && law.given ? law.given : {};
-}
-
-function toLawContext<TArgs extends unknown[], TResult>({
-    inputNames,
-    inputs,
+function toLawContext<TInput, TResult>({
+    input,
     result,
 }: {
-    inputNames: string[];
-    inputs: TArgs;
+    input: TInput;
     result: TResult;
-}): LawContext<TArgs, TResult> {
-    return {
-        ...toInputContext(inputNames, inputs),
-        result,
-    };
+}): LawContext<TInput, TResult> {
+    return { input, result };
 }
 
 function toLawFailure({
     calls,
     error,
-    inputs,
+    input,
 }: {
     calls: CallTrace[];
     error: unknown;
-    inputs: unknown[];
+    input: unknown;
 }): LawFailure {
     if (error instanceof LawFailure) {
         return error;
     }
 
     const reason = error instanceof Error ? error.message : String(error);
-    return new LawFailure({ calls, inputs, reason });
+    return new LawFailure({ calls, input, reason });
 }
 
-async function invokeTarget<TArgs extends unknown[], TResult>({
+async function invokeTarget<TInput, TResult>({
     calls,
     dependencyArgumentNames,
     dependencyParameterName,
     given,
-    inputNames,
-    inputs,
+    input,
     target,
 }: {
     calls: CallTrace[];
     dependencyArgumentNames: Record<string, string[]>;
     dependencyParameterName?: string;
-    given: Given<TArgs>;
-    inputNames: string[];
-    inputs: TArgs;
+    given: Given<TInput>;
+    input: TInput;
     target: (...inputs: unknown[]) => Awaitable<TResult>;
 }): Promise<TResult> {
     try {
         const result = dependencyParameterName
-            ? await target(
-                  ...inputs,
-                  createDependencyBag({ dependencyArgumentNames, given, inputNames, inputs }),
-              )
-            : await target(...inputs);
+            ? await target(input, createDependencyBag({ dependencyArgumentNames, given, input }))
+            : await target(input);
 
-        calls.push({ inputs, kind: "generated", result });
+        calls.push({ input, result });
         return result;
     } catch (error) {
-        calls.push({
-            error: error instanceof Error ? error.message : String(error),
-            inputs,
-            kind: "generated",
-        });
+        calls.push({ error: error instanceof Error ? error.message : String(error), input });
         throw error;
     }
 }
 
-export async function executeLaw<TArgs extends unknown[], TResult>({
+export async function executeLaw<TInput, TResult>({
     dependencyArgumentNames,
     dependencyParameterName,
     given,
-    inputNames,
-    inputs,
+    input,
     law,
     target,
-}: LawExecution<TArgs, TResult>): Promise<void> {
+}: LawExecution<TInput, TResult>): Promise<void> {
     const calls: CallTrace[] = [];
 
     try {
-        if (await shouldSkipLaw({ inputNames, inputs, law })) {
+        if (await shouldSkipLaw({ input, law })) {
             return;
         }
 
@@ -160,16 +111,15 @@ export async function executeLaw<TArgs extends unknown[], TResult>({
             dependencyArgumentNames,
             dependencyParameterName,
             given,
-            inputNames,
-            inputs,
+            input,
             target,
         });
-        const passed = await getAssertion(law)(toLawContext({ inputNames, inputs, result }));
+        const passed = await law.holds(toLawContext({ input, result }));
 
         if (!passed) {
-            throw new LawFailure({ calls, inputs, reason: "Law returned false.", result });
+            throw new LawFailure({ calls, input, reason: "Law returned false.", result });
         }
     } catch (error) {
-        throw toLawFailure({ calls, error, inputs });
+        throw toLawFailure({ calls, error, input });
     }
 }

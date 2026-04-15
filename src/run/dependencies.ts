@@ -1,66 +1,71 @@
-import type {
-    Given,
-    MockContext,
-    MockDefinition,
-    MockExpectation,
-    NamedInputs,
-} from "../public/spec.ts";
-import { toNamedArgs, toNamedInputs } from "../runtime/named-values.ts";
+import type { Given, MockContext, MockDefinition, MockExpectation } from "../public/spec.ts";
+import { toNamedArgs } from "../runtime/named-values.ts";
 
-function isMockExpectation<TArgs extends unknown[]>(
-    definition: MockDefinition<TArgs>,
-): definition is MockExpectation<TArgs> {
-    return typeof definition !== "function";
+function isMockExpectation<TInput>(
+    definition: MockDefinition<TInput>,
+): definition is MockExpectation<TInput> {
+    return typeof definition === "object" && definition !== null && "where" in definition;
 }
 
-function toMockContext<TArgs extends unknown[]>({
+function toMockContext<TInput>({
     argNames,
-    inputNames,
-    inputValues,
+    input,
     values,
 }: {
     argNames: string[];
-    inputNames: string[];
-    inputValues: TArgs;
+    input: TInput;
     values: unknown[];
-}): MockContext<TArgs> {
+}): MockContext<TInput> {
     return {
         args: toNamedArgs(argNames, values),
-        inputs: toNamedInputs(inputNames, inputValues) as NamedInputs<TArgs>,
-        values: inputValues,
+        input,
     };
 }
 
-async function resolveMockDefinition<TArgs extends unknown[]>({
+function resolveMockDefinition<TInput>({
     context,
     definition,
     name,
 }: {
-    context: MockContext<TArgs>;
-    definition: MockDefinition<TArgs>;
+    context: MockContext<TInput>;
+    definition: MockDefinition<TInput>;
     name: string;
 }): Promise<unknown> {
-    if (!isMockExpectation(definition)) {
-        return definition(context);
+    if (typeof definition === "function") {
+        return Promise.resolve(definition(context));
     }
 
-    if (!(await definition.when(context))) {
+    if (!isMockExpectation(definition)) {
+        return Promise.resolve(definition);
+    }
+
+    return resolveMockExpectation({ context, expectation: definition, name });
+}
+
+async function resolveMockExpectation<TInput>({
+    context,
+    expectation,
+    name,
+}: {
+    context: MockContext<TInput>;
+    expectation: MockExpectation<TInput>;
+    name: string;
+}): Promise<unknown> {
+    if (!(await expectation.where(context))) {
         throw new Error(`Mock expectation failed for ${name}.`);
     }
 
-    return definition.returns ? definition.returns(context) : definition.return;
+    return expectation.returns ? expectation.returns(context) : expectation.return;
 }
 
-export function createDependencyBag<TArgs extends unknown[]>({
+export function createDependencyBag<TInput>({
     dependencyArgumentNames,
     given,
-    inputNames,
-    inputs,
+    input,
 }: {
     dependencyArgumentNames: Record<string, string[]>;
-    given: Given<TArgs>;
-    inputNames: string[];
-    inputs: TArgs;
+    given: Given<TInput>;
+    input: TInput;
 }): Record<string, unknown> {
     return Object.fromEntries(
         Object.entries(given).map(([name, definition]) => [
@@ -71,8 +76,7 @@ export function createDependencyBag<TArgs extends unknown[]>({
                         argNames:
                             dependencyArgumentNames[name] ??
                             values.map((_, index) => `arg${index}`),
-                        inputNames,
-                        inputValues: inputs,
+                        input,
                         values,
                     }),
                     definition,

@@ -1,13 +1,12 @@
 export type CallTrace = {
     error?: string;
-    inputs: unknown[];
-    kind: "generated" | "run";
+    input: unknown;
     result?: unknown;
 };
 
 export type FailureDetails = {
     calls: CallTrace[];
-    inputs: unknown[];
+    input: unknown;
     reason: string;
     result?: unknown;
 };

@@ -27,6 +27,12 @@
     },
     "overrides": [
         {
+            "files": ["**/*.holds.ts"],
+            "rules": {
+                "max-lines-per-function": "off",
+            },
+        },
+        {
             "files": ["test/**/*.{ts,tsx,js,jsx}"],
             "rules": {
                 "max-lines-per-function": "off",

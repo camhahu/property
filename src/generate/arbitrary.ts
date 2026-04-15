@@ -2,7 +2,7 @@ import {
     array,
     boolean,
     constant,
-    integer,
+    constantFrom,
     oneof,
     record,
     string as stringArbitrary,
@@ -31,12 +31,26 @@ function arbitraryForObject(shape: Extract<Shape, { kind: "object" }>): Arbitrar
     return record(recordModel, { requiredKeys });
 }
 
+function arrayArbitrary(shape: Extract<Shape, { kind: "array" }>): Arbitrary<unknown> {
+    const element = arbitraryForShape(shape.element);
+
+    return oneof(
+        constant([]),
+        element.map((value) => [value]),
+        array(element, { maxLength: 5 }),
+    );
+}
+
+function numberArbitrary(): Arbitrary<number> {
+    return constantFrom(0, 1, 1, 1, 1, 1, 2, 5, 10, 25, 50, 100, 5000, 5000, 5000, 5000, 5000);
+}
+
 const shapeBuilders: ShapeBuilderMap = {
-    array: (shape) => array(arbitraryForShape(shape.element), { maxLength: 5 }),
+    array: arrayArbitrary,
     boolean: () => boolean(),
     literal: (shape) => constant(shape.value),
     null: () => constant(null),
-    number: () => integer({ max: 100, min: 0 }),
+    number: () => numberArbitrary(),
     object: arbitraryForObject,
     string: () => stringArbitrary({ maxLength: 12 }),
     tuple: (shape) => tuple(...shape.items.map((item) => arbitraryForShape(item))),

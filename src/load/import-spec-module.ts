@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 
 import type { SpecDefinition } from "../public/spec.ts";
 
-function isSpecDefinition(value: unknown): value is SpecDefinition<unknown[], unknown> {
+function isSpecDefinition(value: unknown): value is SpecDefinition<unknown, unknown> {
     return (
         Boolean(value) &&
         typeof value === "object" &&
@@ -10,9 +10,7 @@ function isSpecDefinition(value: unknown): value is SpecDefinition<unknown[], un
     );
 }
 
-function getExportedSpec(
-    moduleExports: Record<string, unknown>,
-): SpecDefinition<unknown[], unknown> {
+function getExportedSpec(moduleExports: Record<string, unknown>): SpecDefinition<unknown, unknown> {
     const definitions = Object.values(moduleExports).filter(isSpecDefinition);
     const [definition] = definitions;
 
@@ -25,7 +23,7 @@ function getExportedSpec(
 
 export async function importSpecModule(
     specFilePath: string,
-): Promise<SpecDefinition<unknown[], unknown>> {
+): Promise<SpecDefinition<unknown, unknown>> {
     const moduleUrl = pathToFileURL(specFilePath).href;
     const imported = await import(`${moduleUrl}?t=${Date.now()}`);
     return getExportedSpec(imported as Record<string, unknown>);

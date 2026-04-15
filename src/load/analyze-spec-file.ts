@@ -2,7 +2,7 @@ import path from "node:path";
 
 import type ts from "typescript";
 
-import type { ParameterShape } from "../types/shape.ts";
+import type { Shape } from "../types/shape.ts";
 import { createProgram } from "./create-program.ts";
 import { shapeFromType } from "./shape-from-type.ts";
 import { getLawSources, getTargetSymbol, type LawSource } from "./spec-call.ts";
@@ -12,8 +12,9 @@ export type { LawSource } from "./spec-call.ts";
 export type AnalyzedSpec = {
     dependencyArgumentNames: Record<string, string[]>;
     dependencyParameterName?: string;
+    inputName: string;
+    inputShape: Shape;
     lawSources: Record<string, LawSource>;
-    parameterShapes: ParameterShape[];
     specFilePath: string;
     targetFilePath: string;
     targetName: string;
@@ -58,10 +59,6 @@ function getSignature({
     return signature;
 }
 
-function isDependencyParameter(name: string | undefined, parameterCount: number): boolean {
-    return parameterCount > 1 && (name === "dependencies" || name === "deps");
-}
-
 function getParameterName({
     index,
     parameter,
@@ -74,6 +71,10 @@ function getParameterName({
     return signature.declaration?.parameters[index]?.name.getText() ?? parameter.getName();
 }
 
+function isDependencyParameter(name: string | undefined, parameterCount: number): boolean {
+    return parameterCount === 2 && name === "dependencies";
+}
+
 function getDependencyParameter(signature: ts.Signature): ts.Symbol | undefined {
     return signature.parameters.find((parameter, index) =>
         isDependencyParameter(
@@ -83,7 +84,7 @@ function getDependencyParameter(signature: ts.Signature): ts.Symbol | undefined 
     );
 }
 
-function getDependencyPropertyArgumentNames(
+function getDependencyPropertyEntry(
     checker: ts.TypeChecker,
     property: ts.Symbol,
 ): [string, string[]] | undefined {
@@ -95,21 +96,11 @@ function getDependencyPropertyArgumentNames(
 
     return toDependencyPropertyEntry(
         property,
-        getDependencyPropertySignature({ checker, property, propertyDeclaration }),
+        checker.getSignaturesOfType(
+            checker.getTypeOfSymbolAtLocation(property, propertyDeclaration),
+            0,
+        )[0],
     );
-}
-
-function getDependencyPropertySignature({
-    checker,
-    property,
-    propertyDeclaration,
-}: {
-    checker: ts.TypeChecker;
-    property: ts.Symbol;
-    propertyDeclaration: ts.Declaration;
-}): ts.Signature | undefined {
-    const propertyType = checker.getTypeOfSymbolAtLocation(property, propertyDeclaration);
-    return checker.getSignaturesOfType(propertyType, 0)[0];
 }
 
 function toDependencyPropertyEntry(
@@ -145,35 +136,12 @@ function getDependencyArgumentNames({
     return Object.fromEntries(
         checker
             .getPropertiesOfType(dependencyType)
-            .map((property) => getDependencyPropertyArgumentNames(checker, property))
+            .map((property) => getDependencyPropertyEntry(checker, property))
             .filter((entry): entry is [string, string[]] => entry !== undefined),
     );
 }
 
-function toParameterShape({
-    checker,
-    declaration,
-    name,
-    parameter,
-}: {
-    checker: ts.TypeChecker;
-    declaration: ts.Declaration;
-    name: string;
-    parameter: ts.Symbol;
-}): ParameterShape {
-    const parameterDeclaration = parameter.valueDeclaration ?? declaration;
-
-    return {
-        name,
-        shape: shapeFromType({
-            checker,
-            seen: new Set<ts.Type>(),
-            type: checker.getTypeOfSymbolAtLocation(parameter, parameterDeclaration),
-        }),
-    };
-}
-
-function getParameterAnalysis({
+function getInputAnalysis({
     checker,
     declaration,
     signature,
@@ -181,20 +149,33 @@ function getParameterAnalysis({
     checker: ts.TypeChecker;
     declaration: ts.Declaration;
     signature: ts.Signature;
-}): { dependencyParameterName?: string; parameterShapes: ParameterShape[] } {
-    let dependencyParameterName: string | undefined;
-    const parameterShapes = signature.parameters.flatMap((parameter, index) => {
-        const name = getParameterName({ index, parameter, signature });
+}): { dependencyParameterName?: string; inputName: string; inputShape: Shape } {
+    const inputParameter = signature.parameters.find(
+        (parameter, index) =>
+            !isDependencyParameter(
+                getParameterName({ index, parameter, signature }),
+                signature.parameters.length,
+            ),
+    );
 
-        if (isDependencyParameter(name, signature.parameters.length)) {
-            dependencyParameterName = name;
-            return [];
-        }
+    if (!inputParameter) {
+        throw new Error("spec targets must have one business input parameter.");
+    }
 
-        return [toParameterShape({ checker, declaration, name, parameter })];
-    });
+    const inputIndex = signature.parameters.indexOf(inputParameter);
+    const inputName = getParameterName({ index: inputIndex, parameter: inputParameter, signature });
+    const parameterDeclaration = inputParameter.valueDeclaration ?? declaration;
+    const dependencyParameter = getDependencyParameter(signature);
 
-    return { dependencyParameterName, parameterShapes };
+    return {
+        dependencyParameterName: dependencyParameter?.getName(),
+        inputName,
+        inputShape: shapeFromType({
+            checker,
+            seen: new Set<ts.Type>(),
+            type: checker.getTypeOfSymbolAtLocation(inputParameter, parameterDeclaration),
+        }),
+    };
 }
 
 export function analyzeSpecFile(specFilePath: string): AnalyzedSpec {
@@ -205,13 +186,14 @@ export function analyzeSpecFile(specFilePath: string): AnalyzedSpec {
     const declaration = getDeclaration(targetSymbol);
     const signature = getSignature({ checker, declaration, symbol: targetSymbol });
     const targetSourceFile = declaration.getSourceFile();
-    const parameterAnalysis = getParameterAnalysis({ checker, declaration, signature });
+    const inputAnalysis = getInputAnalysis({ checker, declaration, signature });
 
     return {
         dependencyArgumentNames: getDependencyArgumentNames({ checker, declaration, signature }),
-        dependencyParameterName: parameterAnalysis.dependencyParameterName,
+        dependencyParameterName: inputAnalysis.dependencyParameterName,
+        inputName: inputAnalysis.inputName,
+        inputShape: inputAnalysis.inputShape,
         lawSources: getLawSources(sourceFile),
-        parameterShapes: parameterAnalysis.parameterShapes,
         specFilePath,
         targetFilePath: path.resolve(targetSourceFile.fileName),
         targetName: targetSymbol.getName(),

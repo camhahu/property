@@ -40,129 +40,120 @@ function isPaidShippingCase(input: CheckoutInput): boolean {
 }
 
 const noCoupon = {
-    fetchCoupon: () => Promise.resolve(null),
+    fetchCoupon: null,
 };
 
-export const cartSpec = spec(calculateCartSummary, {
-    "empty cart stays empty": {
-        given: noCoupon,
-        when: ({ inputs }) => itemCountOf(inputs.cart.items) === 0,
-        assert: ({ result }) => isZeroSummary(result),
-    },
+export const cartSpec = spec(calculateCartSummary, ({ law, section }) => {
+    section("totals", () => {
+        law("empty cart stays empty", {
+            given: noCoupon,
+            where: ({ input }) => itemCountOf(input.cart.items) === 0,
+            holds: ({ result }) => isZeroSummary(result),
+        });
 
-    "item count matches quantities": {
-        given: noCoupon,
-        assert: ({ inputs, result }) => result.itemCount === itemCountOf(inputs.cart.items),
-    },
+        law("item count matches quantities", {
+            given: noCoupon,
+            holds: ({ input, result }) => result.itemCount === itemCountOf(input.cart.items),
+        });
 
-    "subtotal matches unit price times quantity": {
-        given: noCoupon,
-        assert: ({ inputs, result }) => result.subtotal === subtotalOf(inputs.cart.items),
-    },
+        law("subtotal matches unit price times quantity", {
+            given: noCoupon,
+            holds: ({ input, result }) => result.subtotal === subtotalOf(input.cart.items),
+        });
 
-    "shipping is zero at or above threshold": {
-        given: noCoupon,
-        when: ({ inputs }) => subtotalOf(inputs.cart.items) >= 5000,
-        assert: ({ result }) => result.shipping === 0,
-    },
+        law("total balances subtotal discount and shipping", {
+            given: noCoupon,
+            holds: ({ result }) =>
+                result.total === result.subtotal - result.discount + result.shipping,
+        });
+    });
 
-    "shipping is zero exactly at the threshold": {
-        given: noCoupon,
-        sample: {
-            cart: {
-                items: [{ fragile: false, quantity: 1, unitPriceCents: 5000 }],
-                membership: "standard",
+    section("shipping", () => {
+        law("shipping is zero at or above threshold", {
+            given: noCoupon,
+            where: ({ input }) => subtotalOf(input.cart.items) >= 5000,
+            holds: ({ result }) => result.shipping === 0,
+        });
+
+        law("shipping is zero exactly at the threshold", {
+            given: noCoupon,
+            where: ({ input }) => subtotalOf(input.cart.items) === 5000,
+            holds: ({ result }) => result.shipping === 0,
+        });
+
+        law("standard shipping matches the published formula", {
+            given: noCoupon,
+            where: ({ input }) => isPaidShippingCase(input) && input.cart.membership === "standard",
+            holds: ({ input, result }) =>
+                result.shipping === 700 + fragileLineCount(input.cart.items) * 200,
+        });
+
+        law("premium shipping halves the paid shipping formula", {
+            given: noCoupon,
+            where: ({ input }) => isPaidShippingCase(input) && input.cart.membership === "premium",
+            holds: ({ input, result }) =>
+                result.shipping ===
+                Math.floor((700 + fragileLineCount(input.cart.items) * 200) / 2),
+        });
+    });
+
+    section("coupons", () => {
+        law("missing coupon means no discount", {
+            where: ({ input }) => !hasCouponCode(input),
+            given: {
+                fetchCoupon: {
+                    return: null,
+                    where: ({ input }) => hasCouponCode(input),
+                },
             },
-        },
-        assert: ({ result }) => result.shipping === 0,
-    },
+            holds: ({ result }) => result.discount === 0,
+        });
 
-    "standard shipping matches the published formula": {
-        given: noCoupon,
-        when: ({ inputs }) => isPaidShippingCase(inputs) && inputs.cart.membership === "standard",
-        assert: ({ inputs, result }) =>
-            result.shipping === 700 + fragileLineCount(inputs.cart.items) * 200,
-    },
-
-    "premium shipping halves the paid shipping formula": {
-        given: noCoupon,
-        when: ({ inputs }) => isPaidShippingCase(inputs) && inputs.cart.membership === "premium",
-        assert: ({ inputs, result }) =>
-            result.shipping === Math.floor((700 + fragileLineCount(inputs.cart.items) * 200) / 2),
-    },
-
-    "missing coupon means no discount": {
-        when: ({ inputs }) => !hasCouponCode(inputs),
-        given: {
-            fetchCoupon: {
-                return: null,
-                when: ({ inputs }) => hasCouponCode(inputs),
+        law("coupon code is passed to fetchCoupon", {
+            where: ({ input }) => hasPositiveSubtotal(input) && hasCouponCode(input),
+            given: {
+                fetchCoupon: {
+                    return: { type: "percent", value: 10 },
+                    where: ({ args, input }) => args.code === normalizedCouponCode(input),
+                },
             },
-        },
-        assert: ({ result }) => result.discount === 0,
-    },
+            holds: ({ input, result }) =>
+                result.discount === Math.round(subtotalOf(input.cart.items) * 0.1),
+        });
 
-    "coupon code is passed to fetchCoupon": {
-        when: ({ inputs }) => hasPositiveSubtotal(inputs) && hasCouponCode(inputs),
-        given: {
-            fetchCoupon: {
-                return: { type: "percent", value: 10 },
-                when: ({ args, inputs }) => args.code === normalizedCouponCode(inputs),
+        law("100 percent coupon makes the subtotal free", {
+            where: ({ input }) => hasPositiveSubtotal(input) && hasCouponCode(input),
+            given: {
+                fetchCoupon: { type: "percent", value: 100 },
             },
-        },
-        assert: ({ inputs, result }) =>
-            result.discount === Math.round(subtotalOf(inputs.cart.items) * 0.1),
-    },
+            holds: ({ input, result }) =>
+                result.discount === subtotalOf(input.cart.items) &&
+                result.total === result.shipping,
+        });
 
-    "100 percent coupon makes the subtotal free": {
-        when: ({ inputs }) => hasPositiveSubtotal(inputs) && hasCouponCode(inputs),
-        given: {
-            fetchCoupon: {
-                return: { type: "percent", value: 100 },
-                when: ({ args, inputs }) => args.code === normalizedCouponCode(inputs),
+        law("fixed coupons clamp at the subtotal", {
+            where: ({ input }) => hasPositiveSubtotal(input) && hasCouponCode(input),
+            given: {
+                fetchCoupon: { type: "fixed", value: 4000 },
             },
-        },
-        assert: ({ inputs, result }) =>
-            result.discount === subtotalOf(inputs.cart.items) && result.total === result.shipping,
-    },
+            holds: ({ input, result }) =>
+                result.discount === Math.min(subtotalOf(input.cart.items), 4000),
+        });
 
-    "fixed coupons clamp at the subtotal": {
-        when: ({ inputs }) => hasPositiveSubtotal(inputs) && hasCouponCode(inputs),
-        given: {
-            fetchCoupon: {
-                return: { type: "fixed", value: 4000 },
-                when: ({ args, inputs }) => args.code === normalizedCouponCode(inputs),
+        law("negative fixed coupons are ignored", {
+            where: ({ input }) => hasCouponCode(input),
+            given: {
+                fetchCoupon: { type: "fixed", value: -25 },
             },
-        },
-        assert: ({ inputs, result }) =>
-            result.discount === Math.min(subtotalOf(inputs.cart.items), 4000),
-    },
+            holds: ({ result }) => result.discount === 0,
+        });
 
-    "negative fixed coupons are ignored": {
-        when: ({ inputs }) => hasCouponCode(inputs),
-        given: {
-            fetchCoupon: {
-                return: { type: "fixed", value: -25 },
-                when: ({ args, inputs }) => args.code === normalizedCouponCode(inputs),
+        law("negative percent coupons are ignored", {
+            where: ({ input }) => hasCouponCode(input),
+            given: {
+                fetchCoupon: { type: "percent", value: -25 },
             },
-        },
-        assert: ({ result }) => result.discount === 0,
-    },
-
-    "negative percent coupons are ignored": {
-        when: ({ inputs }) => hasCouponCode(inputs),
-        given: {
-            fetchCoupon: {
-                return: { type: "percent", value: -25 },
-                when: ({ args, inputs }) => args.code === normalizedCouponCode(inputs),
-            },
-        },
-        assert: ({ result }) => result.discount === 0,
-    },
-
-    "total balances subtotal discount and shipping": {
-        given: noCoupon,
-        assert: ({ result }) =>
-            result.total === result.subtotal - result.discount + result.shipping,
-    },
+            holds: ({ result }) => result.discount === 0,
+        });
+    });
 });

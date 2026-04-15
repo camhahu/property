@@ -11,23 +11,22 @@ export function asCheckDetails(value: unknown): CheckDetails {
     return value as CheckDetails;
 }
 
-export function getCounterexampleInputs(details: CheckDetails): unknown[] {
+export function getCounterexampleInput(details: CheckDetails): unknown {
     if (!details.failed || !details.counterexample) {
-        return [];
+        return undefined;
     }
 
-    const [inputs] = details.counterexample;
-    return Array.isArray(inputs) ? inputs : [];
+    const [input] = details.counterexample;
+    return input;
 }
 
 function getFailureReason(details: CheckDetails): string {
     const error = "error" in details ? details.error : undefined;
-
     return error instanceof Error ? error.message : String(error ?? "Law failed.");
 }
 
-export function getFailure(details: CheckDetails, inputs: unknown[]): FailureDetails {
+export function getFailure(details: CheckDetails, input: unknown): FailureDetails {
     return details.errorInstance instanceof Error && "details" in details.errorInstance
         ? (details.errorInstance.details as FailureDetails)
-        : { calls: [], inputs, reason: getFailureReason(details) };
+        : { calls: [], input, reason: getFailureReason(details) };
 }

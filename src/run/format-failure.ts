@@ -21,28 +21,20 @@ function getLawSection(
     };
 }
 
-function getCallLabel(call: CallTrace, index: number): string {
-    return call.kind === "generated"
-        ? `  call ${index + 1} (generated):`
-        : `  call ${index + 1} (run):`;
-}
-
 function formatValue(value: unknown, prefix: string): string {
     return inspect(value, { depth: 6, sorted: true }).replaceAll("\n", `\n${prefix}`);
 }
 
-function getInputsSection(analyzedSpec: AnalyzedSpec, inputs: unknown[]): string[] {
-    return analyzedSpec.parameterShapes.map(
-        (parameter, index) => `    ${parameter.name}: ${formatValue(inputs[index], "    ")}`,
-    );
+function getInputSection(analyzedSpec: AnalyzedSpec, input: unknown): string[] {
+    return [`    ${analyzedSpec.inputName}: ${formatValue(input, "    ")}`];
 }
 
 function getOutputSection(call: CallTrace): string[] {
-    if (call.error !== undefined) {
-        return ["", `  error: ${call.error}`];
+    if (call.error === undefined) {
+        return ["", "  result:", `    ${formatValue(call.result, "    ")}`];
     }
 
-    return ["", "  result:", `    ${formatValue(call.result, "    ")}`];
+    return ["", `  error: ${call.error}`];
 }
 
 function formatCall({
@@ -55,10 +47,10 @@ function formatCall({
     index: number;
 }): string {
     return [
-        getCallLabel(call, index),
+        `  call ${index + 1}:`,
         "",
-        "  inputs:",
-        ...getInputsSection(analyzedSpec, call.inputs),
+        "  input:",
+        ...getInputSection(analyzedSpec, call.input),
         ...getOutputSection(call),
     ].join("\n");
 }
@@ -66,7 +58,6 @@ function formatCall({
 function formatCalls(analyzedSpec: AnalyzedSpec, failure: FailureDetails): string[] {
     return failure.calls.flatMap((call, index) => {
         const renderedCall = formatCall({ analyzedSpec, call, index });
-
         return index === 0 ? [renderedCall] : ["", renderedCall];
     });
 }

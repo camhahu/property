@@ -1,73 +1,89 @@
 export type Awaitable<T> = Promise<T> | T;
 
-export type NamedInputs<TArgs extends unknown[]> = TArgs extends [infer TInput]
-    ? TInput
-    : Record<string, unknown>;
-
-export type InputContext<TArgs extends unknown[]> = {
-    inputs: NamedInputs<TArgs>;
-    values: TArgs;
+export type InputContext<TInput> = {
+    input: TInput;
 };
 
-export type MockContext<TArgs extends unknown[]> = InputContext<TArgs> & {
+export type MockContext<TInput> = InputContext<TInput> & {
     args: Record<string, unknown>;
 };
 
-export type MockHandler<TArgs extends unknown[]> = (
-    context: MockContext<TArgs>,
-) => Awaitable<unknown>;
+export type MockHandler<TInput> = (context: MockContext<TInput>) => Awaitable<unknown>;
 
-export type MockExpectation<TArgs extends unknown[]> = {
+export type MockExpectation<TInput> = {
     return?: unknown;
-    returns?: MockHandler<TArgs>;
-    when: (context: MockContext<TArgs>) => Awaitable<boolean>;
+    returns?: MockHandler<TInput>;
+    where: (context: MockContext<TInput>) => Awaitable<boolean>;
 };
 
-export type MockDefinition<TArgs extends unknown[]> = MockExpectation<TArgs> | MockHandler<TArgs>;
+export type MockValue = null | boolean | number | string | Record<string, unknown> | unknown[];
 
-export type Given<TArgs extends unknown[]> = Record<string, MockDefinition<TArgs>>;
+export type MockDefinition<TInput> = MockExpectation<TInput> | MockHandler<TInput> | MockValue;
 
-export type LawContext<TArgs extends unknown[], TResult> = InputContext<TArgs> & {
+export type Given<TInput> = Record<string, MockDefinition<TInput>>;
+
+export type Holds<TInput, TResult> = (context: LawContext<TInput, TResult>) => Awaitable<boolean>;
+
+export type LawContext<TInput, TResult> = InputContext<TInput> & {
     result: TResult;
 };
 
-export type Law<TArgs extends unknown[], TResult> = (
-    context: LawContext<TArgs, TResult>,
-) => Awaitable<boolean>;
-
-export type When<TArgs extends unknown[]> = (context: InputContext<TArgs>) => Awaitable<boolean>;
-
-export type StructuredLaw<TArgs extends unknown[], TResult> = {
-    assert: Law<TArgs, TResult>;
-    given?: Given<TArgs>;
-    sample?: NamedInputs<TArgs>;
-    when?: When<TArgs>;
+export type LawDefinition<TInput, TResult> = {
+    holds: Holds<TInput, TResult>;
+    given?: Given<TInput>;
+    where?: (context: InputContext<TInput>) => Awaitable<boolean>;
 };
 
-export type LawDefinition<TArgs extends unknown[], TResult> =
-    | Law<TArgs, TResult>
-    | StructuredLaw<TArgs, TResult>;
+export type CollectedLaw<TInput, TResult> = LawDefinition<TInput, TResult> & {
+    name: string;
+};
 
-export type SpecDefinition<TArgs extends unknown[], TResult> = {
+export type SpecBuilder<TInput, TResult> = {
+    section: (name: string, build: () => void) => void;
+    law: (name: string, definition: LawDefinition<TInput, TResult>) => void;
+};
+
+export type SpecDefinition<TInput, TResult> = {
     readonly __brand: "holds-spec";
-    readonly laws: Record<string, LawDefinition<TArgs, TResult>>;
-    readonly target: (...inputs: unknown[]) => Awaitable<TResult>;
+    readonly target: (...inputs: any[]) => Awaitable<TResult>;
+    readonly laws: CollectedLaw<TInput, TResult>[];
 };
 
-export function spec<TArgs extends unknown[], TDependencies, TResult>(
-    target: (...inputs: [...TArgs, TDependencies]) => Awaitable<TResult>,
-    laws: Record<string, LawDefinition<TArgs, TResult>>,
-): SpecDefinition<TArgs, TResult>;
+export function spec<TInput, TDependencies, TResult>(
+    target: (input: TInput, dependencies: TDependencies) => Awaitable<TResult>,
+    build: (builder: SpecBuilder<TInput, TResult>) => void,
+): SpecDefinition<TInput, TResult>;
 
-export function spec<TArgs extends unknown[], TResult>(
-    target: (...inputs: TArgs) => Awaitable<TResult>,
-    laws: Record<string, LawDefinition<TArgs, TResult>>,
-): SpecDefinition<TArgs, TResult>;
+export function spec<TInput, TResult>(
+    target: (input: TInput) => Awaitable<TResult>,
+    build: (builder: SpecBuilder<TInput, TResult>) => void,
+): SpecDefinition<TInput, TResult>;
 
 export function spec(
     target: (...inputs: any[]) => Awaitable<any>,
-    laws: Record<string, LawDefinition<any[], any>>,
-): SpecDefinition<unknown[], unknown> {
+    build: (builder: SpecBuilder<any, any>) => void,
+): SpecDefinition<any, any> {
+    const laws: CollectedLaw<any, any>[] = [];
+    const sections: string[] = [];
+
+    build({
+        section(name, next) {
+            sections.push(name);
+
+            try {
+                next();
+            } finally {
+                sections.pop();
+            }
+        },
+        law(name, definition) {
+            laws.push({
+                ...definition,
+                name: sections.length > 0 ? `${sections.join(" / ")} / ${name}` : name,
+            });
+        },
+    });
+
     return {
         __brand: "holds-spec",
         laws,

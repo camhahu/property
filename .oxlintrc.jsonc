@@ -23,6 +23,7 @@
         "import/no-default-export": "error",
         "max-dependencies": "off",
         "no-inner-declarations": "off",
+        "no-unreadable-array-destructuring": "error",
     },
     "overrides": [
         {

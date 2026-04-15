@@ -1,17 +1,26 @@
 {
     "name": "holds",
+    "bin": {
+        "holds": "./src/cli.ts"
+    },
     "type": "module",
     "module": "index.ts",
+    "exports": {
+        ".": "./index.ts"
+    },
     "scripts": {
         "lint": "oxlint --fix",
-        "fmt": "oxfmt --write"
+        "fmt": "oxfmt --write",
+        "check": "bun run fmt && tsc --noEmit && bun run lint",
+        "verify:example": "bun run ./src/cli.ts run ./examples/cart.holds.ts"
+    },
+    "dependencies": {
+        "fast-check": "^4.6.0",
+        "typescript": "^6.0.2"
     },
     "devDependencies": {
         "@types/bun": "latest",
         "oxfmt": "^0.45.0",
         "oxlint": "^1.60.0"
-    },
-    "peerDependencies": {
-        "typescript": "^5"
     }
 }

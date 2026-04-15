@@ -1,1 +1,17 @@
-console.log("Hello via Bun!");
+export {
+    spec,
+    type Awaitable,
+    type Given,
+    type InputContext,
+    type Law,
+    type LawContext,
+    type LawDefinition,
+    type MockDefinition,
+    type MockExpectation,
+    type MockHandler,
+    type MockContext,
+    type NamedInputs,
+    type SpecDefinition,
+    type StructuredLaw,
+    type When,
+} from "./src/public/spec.ts";

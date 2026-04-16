@@ -39,14 +39,16 @@ async function runLaw({
     });
     const details = asCheckDetails(await check(property, { numRuns }));
 
-    return details.failed
-        ? {
-              failure: getFailure(details, getCounterexampleInput(details)),
-              lawName: law.name,
-              passed: false,
-              runs: details.numRuns,
-          }
-        : { lawName: law.name, passed: true, runs: details.numRuns };
+    if (details.failed) {
+        return {
+            failure: getFailure(details, getCounterexampleInput(details)),
+            lawName: law.name,
+            passed: false,
+            runs: details.numRuns,
+        };
+    }
+
+    return { lawName: law.name, passed: true, runs: details.numRuns };
 }
 
 async function collectLawResults({
@@ -68,11 +70,15 @@ async function collectLawResults({
 function toPropertySuiteResult(lawResults: LawResult[]): PropertySuiteResult {
     const firstFailure = lawResults.find((lawResult) => !lawResult.passed);
 
-    return firstFailure
-        ? { firstFailure, lawResults, passed: false }
-        : { lawResults, passed: true };
+    if (firstFailure) {
+        return { firstFailure, lawResults, passed: false };
+    }
+
+    return { lawResults, passed: true };
 }
 
-export function runPropertySuite(request: PropertySuiteRequest): Promise<PropertySuiteResult> {
-    return collectLawResults(request).then(toPropertySuiteResult);
+export async function runPropertySuite(
+    request: PropertySuiteRequest,
+): Promise<PropertySuiteResult> {
+    return toPropertySuiteResult(await collectLawResults(request));
 }

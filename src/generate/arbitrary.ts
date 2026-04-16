@@ -1,8 +1,10 @@
 import {
+    anything,
     array,
     boolean,
     constant,
     constantFrom,
+    dictionary,
     oneof,
     record,
     string as stringArbitrary,
@@ -45,6 +47,12 @@ function numberArbitrary(): Arbitrary<number> {
     return constantFrom(0, 1, 1, 1, 1, 1, 2, 5, 10, 25, 50, 100, 5000, 5000, 5000, 5000, 5000);
 }
 
+function recordArbitrary(shape: Extract<Shape, { kind: "record" }>): Arbitrary<unknown> {
+    return dictionary(stringArbitrary({ maxLength: 8 }), arbitraryForShape(shape.value), {
+        maxKeys: 4,
+    });
+}
+
 const shapeBuilders: ShapeBuilderMap = {
     array: arrayArbitrary,
     boolean: () => boolean(),
@@ -52,8 +60,18 @@ const shapeBuilders: ShapeBuilderMap = {
     null: () => constant(null),
     number: () => numberArbitrary(),
     object: arbitraryForObject,
+    record: recordArbitrary,
     string: () => stringArbitrary({ maxLength: 12 }),
     tuple: (shape) => tuple(...shape.items.map((item) => arbitraryForShape(item))),
+    unknown: () =>
+        anything({
+            maxDepth: 3,
+            withBigInt: false,
+            withDate: false,
+            withMap: false,
+            withSet: false,
+            withTypedArray: false,
+        }),
     undefined: () => constant(void 0),
     union: (shape) => oneof(...shape.options.map((option) => arbitraryForShape(option))),
 };

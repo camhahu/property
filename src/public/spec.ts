@@ -77,9 +77,15 @@ export function spec(
             }
         },
         law(name, definition) {
+            let fullName = name;
+
+            if (sections.length > 0) {
+                fullName = `${sections.join(" / ")} / ${name}`;
+            }
+
             laws.push({
                 ...definition,
-                name: sections.length > 0 ? `${sections.join(" / ")} / ${name}` : name,
+                name: fullName,
             });
         },
     });

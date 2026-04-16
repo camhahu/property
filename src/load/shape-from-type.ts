@@ -11,13 +11,50 @@ type ShapeRequest = {
 type ShapeResolver = (request: ShapeRequest) => Shape | undefined;
 
 function flattenUnionOptions(options: Shape[]): Shape[] {
-    return options.flatMap((option) =>
-        option.kind === "union" ? flattenUnionOptions(option.options) : [option],
-    );
+    return options.flatMap((option) => {
+        if (option.kind === "union") {
+            return flattenUnionOptions(option.options);
+        }
+
+        return [option];
+    });
+}
+
+function literalValue(
+    checker: ts.TypeChecker,
+    type: ts.LiteralType,
+): boolean | number | string | undefined {
+    if (typeof type.value === "string" || typeof type.value === "number") {
+        return type.value;
+    }
+
+    if (type.flags & ts.TypeFlags.BooleanLiteral) {
+        return checker.typeToString(type) === "true";
+    }
+
+    return undefined;
+}
+
+function literalShape({ checker, type }: ShapeRequest): Shape | undefined {
+    if (!type.isLiteral()) {
+        return undefined;
+    }
+
+    const value = literalValue(checker, type as ts.LiteralType);
+
+    if (value === undefined) {
+        return undefined;
+    }
+
+    return { kind: "literal", value };
 }
 
 function numberShape({ type }: ShapeRequest): Shape | undefined {
-    return type.flags & ts.TypeFlags.NumberLike ? { kind: "number" } : undefined;
+    if (type.flags & ts.TypeFlags.NumberLike) {
+        return { kind: "number" };
+    }
+
+    return undefined;
 }
 
 function booleanShape({ checker, type }: ShapeRequest): Shape | undefined {
@@ -25,9 +62,11 @@ function booleanShape({ checker, type }: ShapeRequest): Shape | undefined {
         return undefined;
     }
 
-    return type.isLiteral()
-        ? { kind: "literal", value: checker.typeToString(type) === "true" }
-        : { kind: "boolean" };
+    if (type.isLiteral()) {
+        return { kind: "literal", value: checker.typeToString(type) === "true" };
+    }
+
+    return { kind: "boolean" };
 }
 
 function stringShape({ type }: ShapeRequest): Shape | undefined {
@@ -35,17 +74,35 @@ function stringShape({ type }: ShapeRequest): Shape | undefined {
         return undefined;
     }
 
-    return type.isLiteral() && typeof type.value === "string"
-        ? { kind: "literal", value: type.value }
-        : { kind: "string" };
+    if (type.isLiteral() && typeof type.value === "string") {
+        return { kind: "literal", value: type.value };
+    }
+
+    return { kind: "string" };
 }
 
 function nullShape({ type }: ShapeRequest): Shape | undefined {
-    return type.flags & ts.TypeFlags.Null ? { kind: "null" } : undefined;
+    if (type.flags & ts.TypeFlags.Null) {
+        return { kind: "null" };
+    }
+
+    return undefined;
 }
 
 function undefinedShape({ type }: ShapeRequest): Shape | undefined {
-    return type.flags & ts.TypeFlags.Undefined ? { kind: "undefined" } : undefined;
+    if (type.flags & ts.TypeFlags.Undefined) {
+        return { kind: "undefined" };
+    }
+
+    return undefined;
+}
+
+function unknownShape({ type }: ShapeRequest): Shape | undefined {
+    if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) {
+        return { kind: "unknown" };
+    }
+
+    return undefined;
 }
 
 function unionShapeFromType({ checker, seen, type }: ShapeRequest): Shape | undefined {
@@ -61,8 +118,16 @@ function unionShapeFromType({ checker, seen, type }: ShapeRequest): Shape | unde
     };
 }
 
+function isArrayContainer(checker: ts.TypeChecker, type: ts.Type): boolean {
+    return (
+        !checker.isTupleType(type) &&
+        checker.isArrayLikeType(type) &&
+        !(type.flags & ts.TypeFlags.StringLike)
+    );
+}
+
 function arrayShapeFromType({ checker, seen, type }: ShapeRequest): Shape | undefined {
-    if (!checker.isArrayType(type)) {
+    if (!isArrayContainer(checker, type)) {
         return undefined;
     }
 
@@ -123,16 +188,39 @@ function objectShapeFromType({ checker, seen, type }: ShapeRequest): Shape | und
     };
 }
 
+function getIndexValueType(checker: ts.TypeChecker, type: ts.Type): ts.Type | undefined {
+    return (
+        checker.getIndexTypeOfType(type, ts.IndexKind.String) ??
+        checker.getIndexTypeOfType(type, ts.IndexKind.Number)
+    );
+}
+
+function recordShapeFromType({ checker, seen, type }: ShapeRequest): Shape | undefined {
+    const valueType = getIndexValueType(checker, type);
+
+    if (!valueType) {
+        return undefined;
+    }
+
+    return {
+        kind: "record",
+        value: shapeFromType({ checker, seen: new Set([...seen, type]), type: valueType }),
+    };
+}
+
 const shapeResolvers: ShapeResolver[] = [
+    literalShape,
     numberShape,
     booleanShape,
     stringShape,
     nullShape,
     undefinedShape,
+    unknownShape,
     unionShapeFromType,
-    arrayShapeFromType,
     tupleShapeFromType,
+    arrayShapeFromType,
     objectShapeFromType,
+    recordShapeFromType,
 ];
 
 export function shapeFromType(request: ShapeRequest): Shape {

@@ -55,7 +55,11 @@ async function resolveMockExpectation<TInput>({
         throw new Error(`Mock expectation failed for ${name}.`);
     }
 
-    return expectation.returns ? expectation.returns(context) : expectation.return;
+    if (expectation.returns) {
+        return expectation.returns(context);
+    }
+
+    return expectation.return;
 }
 
 export function createDependencyBag<TInput>({

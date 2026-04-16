@@ -19,7 +19,15 @@ async function run(specFilePath: string): Promise<void> {
     const definition = await importSpecModule(specFilePath);
     const propertyResult = await runPropertySuite({ analyzedSpec, definition });
 
-    console.log(renderPropertyReport({ analyzedSpec, result: propertyResult }));
+    console.log(
+        renderPropertyReport({
+            inputName: analyzedSpec.inputName,
+            lawSources: analyzedSpec.lawSources,
+            result: propertyResult,
+            specFilePath: analyzedSpec.specFilePath,
+            targetName: analyzedSpec.targetName,
+        }),
+    );
 
     if (!propertyResult.passed) {
         process.exitCode = 1;

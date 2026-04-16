@@ -4,10 +4,11 @@ import type ts from "typescript";
 
 import type { Shape } from "../types/shape.ts";
 import { createProgram } from "./create-program.ts";
+import { getLawSources, type LawSource } from "./law-sources.ts";
 import { shapeFromType } from "./shape-from-type.ts";
-import { getLawSources, getTargetSymbol, type LawSource } from "./spec-call.ts";
+import { getTargetSymbol } from "./spec-call.ts";
 
-export type { LawSource } from "./spec-call.ts";
+export type { LawSource } from "./law-sources.ts";
 
 export type AnalyzedSpec = {
     dependencyArgumentNames: Record<string, string[]>;
@@ -71,17 +72,28 @@ function getParameterName({
     return signature.declaration?.parameters[index]?.name.getText() ?? parameter.getName();
 }
 
-function isDependencyParameter(name: string | undefined, parameterCount: number): boolean {
-    return parameterCount === 2 && name === "dependencies";
+function getInputParameter(signature: ts.Signature): ts.Symbol {
+    if (signature.parameters.length === 0 || signature.parameters.length > 2) {
+        throw new Error(
+            "spec targets must have one business input parameter and at most one dependency bag.",
+        );
+    }
+
+    const [inputParameter] = signature.parameters;
+
+    if (!inputParameter) {
+        throw new Error("spec targets must have one business input parameter.");
+    }
+
+    return inputParameter;
 }
 
 function getDependencyParameter(signature: ts.Signature): ts.Symbol | undefined {
-    return signature.parameters.find((parameter, index) =>
-        isDependencyParameter(
-            getParameterName({ index, parameter, signature }),
-            signature.parameters.length,
-        ),
-    );
+    if (signature.parameters.length === 2) {
+        return signature.parameters[1];
+    }
+
+    return undefined;
 }
 
 function getDependencyPropertyEntry(
@@ -107,9 +119,14 @@ function toDependencyPropertyEntry(
     property: ts.Symbol,
     propertySignature: ts.Signature | undefined,
 ): [string, string[]] | undefined {
-    return propertySignature
-        ? [property.name, propertySignature.parameters.map((parameter) => parameter.getName())]
-        : undefined;
+    if (propertySignature) {
+        return [
+            property.name,
+            propertySignature.parameters.map((parameter) => parameter.getName()),
+        ];
+    }
+
+    return undefined;
 }
 
 function getDependencyArgumentNames({
@@ -150,17 +167,7 @@ function getInputAnalysis({
     declaration: ts.Declaration;
     signature: ts.Signature;
 }): { dependencyParameterName?: string; inputName: string; inputShape: Shape } {
-    const inputParameter = signature.parameters.find(
-        (parameter, index) =>
-            !isDependencyParameter(
-                getParameterName({ index, parameter, signature }),
-                signature.parameters.length,
-            ),
-    );
-
-    if (!inputParameter) {
-        throw new Error("spec targets must have one business input parameter.");
-    }
+    const inputParameter = getInputParameter(signature);
 
     const inputIndex = signature.parameters.indexOf(inputParameter);
     const inputName = getParameterName({ index: inputIndex, parameter: inputParameter, signature });
@@ -193,7 +200,7 @@ export function analyzeSpecFile(specFilePath: string): AnalyzedSpec {
         dependencyParameterName: inputAnalysis.dependencyParameterName,
         inputName: inputAnalysis.inputName,
         inputShape: inputAnalysis.inputShape,
-        lawSources: getLawSources(sourceFile),
+        lawSources: getLawSources(checker, sourceFile),
         specFilePath,
         targetFilePath: path.resolve(targetSourceFile.fileName),
         targetName: targetSymbol.getName(),

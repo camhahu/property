@@ -58,7 +58,12 @@ function fetchedCoupon({
     dependencies: CheckoutDependencies;
 }): Promise<Coupon | null> {
     const code = normalizedCouponCode(couponCode);
-    return code ? dependencies.fetchCoupon(code) : Promise.resolve(null);
+
+    if (code) {
+        return dependencies.fetchCoupon(code);
+    }
+
+    return Promise.resolve(null);
 }
 
 function discountFromCoupon(coupon: Coupon | null, subtotal: number): number {
@@ -106,18 +111,22 @@ function shippingFor({
     const fragileLines = cart.items.filter((item) => item.fragile).length;
     const shipping = baseShipping + fragileLines * fragileSurcharge;
 
-    return cart.membership === "premium" ? Math.floor(shipping / 2) : shipping;
+    if (cart.membership === "premium") {
+        return Math.floor(shipping / 2);
+    }
+
+    return shipping;
 }
 
 export async function calculateCartSummary(
     input: CheckoutInput,
-    dependencies: CheckoutDependencies,
+    services: CheckoutDependencies,
 ): Promise<CartSummary> {
     const itemCount = itemCountOf(input.cart.items);
     const subtotal = subtotalOf(input.cart.items);
     const discount = await discountFor({
         couponCode: input.couponCode,
-        dependencies,
+        dependencies: services,
         subtotal,
     });
     const shipping = shippingFor({ cart: input.cart, itemCount, subtotal });

@@ -29,7 +29,11 @@ async function shouldSkipLaw<TInput, TResult>({
     input,
     law,
 }: Pick<LawExecution<TInput, TResult>, "input" | "law">): Promise<boolean> {
-    return law.where ? !(await law.where(toInputContext(input))) : false;
+    if (!law.where) {
+        return false;
+    }
+
+    return !(await law.where(toInputContext(input)));
 }
 
 export function getGiven<TInput, TResult>(law: LawDefinition<TInput, TResult>): Given<TInput> {
@@ -59,7 +63,12 @@ function toLawFailure({
         return error;
     }
 
-    const reason = error instanceof Error ? error.message : String(error);
+    let reason = String(error);
+
+    if (error instanceof Error) {
+        reason = error.message;
+    }
+
     return new LawFailure({ calls, input, reason });
 }
 
@@ -79,14 +88,27 @@ async function invokeTarget<TInput, TResult>({
     target: (...inputs: unknown[]) => Awaitable<TResult>;
 }): Promise<TResult> {
     try {
-        const result = dependencyParameterName
-            ? await target(input, createDependencyBag({ dependencyArgumentNames, given, input }))
-            : await target(input);
+        let result: TResult;
+
+        if (dependencyParameterName) {
+            result = await target(
+                input,
+                createDependencyBag({ dependencyArgumentNames, given, input }),
+            );
+        } else {
+            result = await target(input);
+        }
 
         calls.push({ input, result });
         return result;
     } catch (error) {
-        calls.push({ error: error instanceof Error ? error.message : String(error), input });
+        let reason = String(error);
+
+        if (error instanceof Error) {
+            reason = error.message;
+        }
+
+        calls.push({ error: reason, input });
         throw error;
     }
 }

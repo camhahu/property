@@ -12,8 +12,10 @@ export type Shape =
               shape: Shape;
           }>;
       }
+    | { kind: "record"; value: Shape }
     | { kind: "string" }
     | { kind: "tuple"; items: Shape[] }
+    | { kind: "unknown" }
     | { kind: "undefined" }
     | { kind: "union"; options: Shape[] };
 

@@ -28,18 +28,24 @@ function getBinaryMutation(
 ): MutationCandidate | undefined {
     const replacement = tokenMutations.get(node.operatorToken.kind);
 
-    return replacement
-        ? {
-              description: `replace ${node.operatorToken.getText(sourceFile)} with ${replacement}`,
-              end: node.operatorToken.end,
-              replacement,
-              start: node.operatorToken.getStart(sourceFile),
-          }
-        : undefined;
+    if (!replacement) {
+        return undefined;
+    }
+
+    return {
+        description: `replace ${node.operatorToken.getText(sourceFile)} with ${replacement}`,
+        end: node.operatorToken.end,
+        replacement,
+        start: node.operatorToken.getStart(sourceFile),
+    };
 }
 
 function getNumericMutation(node: ts.NumericLiteral, sourceFile: ts.SourceFile): MutationCandidate {
-    const replacement = node.text === "0" ? "1" : "0";
+    let replacement = "0";
+
+    if (node.text === "0") {
+        replacement = "1";
+    }
 
     return {
         description: `replace ${node.getText(sourceFile)} with ${replacement}`,
@@ -58,7 +64,11 @@ function getBooleanMutation(
     }
 
     const current = node.getText(sourceFile);
-    const replacement = current === "true" ? "false" : "true";
+    let replacement = "true";
+
+    if (current === "true") {
+        replacement = "false";
+    }
 
     return {
         description: `replace ${current} with ${replacement}`,

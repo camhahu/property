@@ -1,19 +1,19 @@
-import { inspect } from "node:util";
-
-import type { AnalyzedSpec } from "../load/analyze-spec-file.ts";
-import type { CallTrace, FailureDetails } from "./types.ts";
+import type { LawSource } from "../load/analyze-spec-file.ts";
+import { renderFailureText } from "./render-failure-text.ts";
+import type { FailureDetails } from "./types.ts";
 
 type FailureFormatRequest = {
-    analyzedSpec: AnalyzedSpec;
+    lawSources: Record<string, LawSource>;
     failure: FailureDetails;
+    inputName: string;
     lawName: string;
 };
 
 function getLawSection(
-    analyzedSpec: AnalyzedSpec,
+    lawSources: Record<string, LawSource>,
     lawName: string,
 ): { location: string; snippet?: string } {
-    const lawSource = analyzedSpec.lawSources[lawName];
+    const lawSource = lawSources[lawName];
 
     return {
         location: lawSource?.location ?? "unknown",
@@ -21,61 +21,20 @@ function getLawSection(
     };
 }
 
-function formatValue(value: unknown, prefix: string): string {
-    return inspect(value, { depth: 6, sorted: true }).replaceAll("\n", `\n${prefix}`);
-}
+export function formatFailure({
+    failure,
+    inputName,
+    lawName,
+    lawSources,
+}: FailureFormatRequest): string {
+    const lawSection = getLawSection(lawSources, lawName);
 
-function getInputSection(analyzedSpec: AnalyzedSpec, input: unknown): string[] {
-    return [`    ${analyzedSpec.inputName}: ${formatValue(input, "    ")}`];
-}
-
-function getOutputSection(call: CallTrace): string[] {
-    if (call.error === undefined) {
-        return ["", "  result:", `    ${formatValue(call.result, "    ")}`];
-    }
-
-    return ["", `  error: ${call.error}`];
-}
-
-function formatCall({
-    analyzedSpec,
-    call,
-    index,
-}: {
-    analyzedSpec: AnalyzedSpec;
-    call: CallTrace;
-    index: number;
-}): string {
-    return [
-        `  call ${index + 1}:`,
-        "",
-        "  input:",
-        ...getInputSection(analyzedSpec, call.input),
-        ...getOutputSection(call),
-    ].join("\n");
-}
-
-function formatCalls(analyzedSpec: AnalyzedSpec, failure: FailureDetails): string[] {
-    return failure.calls.flatMap((call, index) => {
-        const renderedCall = formatCall({ analyzedSpec, call, index });
-        return index === 0 ? [renderedCall] : ["", renderedCall];
+    return renderFailureText({
+        calls: failure.calls,
+        inputName,
+        lawName,
+        lawSnippet: lawSection.snippet,
+        reason: failure.reason,
+        sourceLocation: lawSection.location,
     });
-}
-
-export function formatFailure({ analyzedSpec, failure, lawName }: FailureFormatRequest): string {
-    const lawSection = getLawSection(analyzedSpec, lawName);
-    const lines = [
-        `  ${lawName}`,
-        "",
-        ...formatCalls(analyzedSpec, failure),
-        "",
-        `  reason: ${failure.reason}`,
-        `  source: ${lawSection.location}`,
-    ];
-
-    if (lawSection.snippet) {
-        lines.push("", `  law: ${lawSection.snippet}`);
-    }
-
-    return lines.join("\n");
 }

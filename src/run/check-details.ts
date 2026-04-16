@@ -1,4 +1,7 @@
+import { getCounterexampleInput } from "./get-counterexample-input.ts";
 import type { FailureDetails } from "./types.ts";
+
+export { getCounterexampleInput } from "./get-counterexample-input.ts";
 
 type CheckDetails = {
     counterexample?: unknown[] | null;
@@ -11,22 +14,24 @@ export function asCheckDetails(value: unknown): CheckDetails {
     return value as CheckDetails;
 }
 
-export function getCounterexampleInput(details: CheckDetails): unknown {
-    if (!details.failed || !details.counterexample) {
-        return undefined;
+function getFailureReason(details: CheckDetails): string {
+    let error: unknown;
+
+    if ("error" in details) {
+        error = details.error;
     }
 
-    const [input] = details.counterexample;
-    return input;
-}
+    if (error instanceof Error) {
+        return error.message;
+    }
 
-function getFailureReason(details: CheckDetails): string {
-    const error = "error" in details ? details.error : undefined;
-    return error instanceof Error ? error.message : String(error ?? "Law failed.");
+    return String(error ?? "Law failed.");
 }
 
 export function getFailure(details: CheckDetails, input: unknown): FailureDetails {
-    return details.errorInstance instanceof Error && "details" in details.errorInstance
-        ? (details.errorInstance.details as FailureDetails)
-        : { calls: [], input, reason: getFailureReason(details) };
+    if (details.errorInstance instanceof Error && "details" in details.errorInstance) {
+        return details.errorInstance.details as FailureDetails;
+    }
+
+    return { calls: [], input, reason: getFailureReason(details) };
 }

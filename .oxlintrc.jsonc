@@ -18,7 +18,7 @@
         "no-abusive-eslint-disable": "error",
         "max-params": ["error", { "max": 2 }],
         "promise/prefer-await-to-then": "error",
-        "max-nested-callbacks": ["error", { "max": 2 }],
+        "max-nested-callbacks": ["error", { "max": 1 }],
         "max-depth": ["error", 3],
         "unicorn/no-array-callback-reference": "off",
         "import/no-default-export": "error",

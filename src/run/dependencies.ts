@@ -62,6 +62,24 @@ async function resolveMockExpectation<TInput>({
     return expectation.return;
 }
 
+function getArgumentNames({
+    dependencyArgumentNames,
+    name,
+    values,
+}: {
+    dependencyArgumentNames: Record<string, string[]>;
+    name: string;
+    values: unknown[];
+}): string[] {
+    const argumentNames = dependencyArgumentNames[name];
+
+    if (argumentNames) {
+        return argumentNames;
+    }
+
+    return values.map((_, index) => `arg${index}`);
+}
+
 export function createDependencyBag<TInput>({
     dependencyArgumentNames,
     given,
@@ -71,21 +89,20 @@ export function createDependencyBag<TInput>({
     given: Given<TInput>;
     input: TInput;
 }): Record<string, unknown> {
-    return Object.fromEntries(
-        Object.entries(given).map(([name, definition]) => [
-            name,
-            (...values: unknown[]) =>
-                resolveMockDefinition({
-                    context: toMockContext({
-                        argNames:
-                            dependencyArgumentNames[name] ??
-                            values.map((_, index) => `arg${index}`),
-                        input,
-                        values,
-                    }),
-                    definition,
-                    name,
+    const bag: Record<string, unknown> = {};
+
+    for (const [name, definition] of Object.entries(given)) {
+        bag[name] = (...values: unknown[]) =>
+            resolveMockDefinition({
+                context: toMockContext({
+                    argNames: getArgumentNames({ dependencyArgumentNames, name, values }),
+                    input,
+                    values,
                 }),
-        ]),
-    );
+                definition,
+                name,
+            });
+    }
+
+    return bag;
 }

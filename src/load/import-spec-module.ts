@@ -1,5 +1,7 @@
 import { pathToFileURL } from "node:url";
 
+import { tsImport } from "tsx/esm/api";
+
 import type { SpecDefinition } from "../public/spec.ts";
 
 function isSpecDefinition(value: unknown): value is SpecDefinition<unknown, unknown> {
@@ -25,6 +27,6 @@ export async function importSpecModule(
     specFilePath: string,
 ): Promise<SpecDefinition<unknown, unknown>> {
     const moduleUrl = pathToFileURL(specFilePath).href;
-    const imported = await import(`${moduleUrl}?t=${Date.now()}`);
+    const imported = await tsImport(moduleUrl, import.meta.url);
     return getExportedSpec(imported as Record<string, unknown>);
 }

@@ -12,10 +12,11 @@
         "lint": "oxlint --fix",
         "fmt": "oxfmt --write",
         "check": "bun run fmt && tsc --noEmit && bun run lint",
-        "verify:example": "bun run ./src/cli.ts run ./examples/cart.holds.ts"
+        "verify:example": "tsx ./src/cli.ts run ./examples/cart.holds.ts"
     },
     "dependencies": {
         "fast-check": "^4.6.0",
+        "tsx": "^4.21.0",
         "typescript": "^6.0.2"
     },
     "devDependencies": {

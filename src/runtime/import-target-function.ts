@@ -2,6 +2,8 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { tsImport } from "tsx/esm/api";
+
 type ImportTargetFunctionRequest = {
     exportName: string;
     id: string;
@@ -39,8 +41,8 @@ export async function importTargetFunction({
     });
 
     try {
-        const imported = await import(`${pathToFileURL(tempFilePath).href}?t=${Date.now()}`);
-        const exported = imported[exportName];
+        const imported = await tsImport(pathToFileURL(tempFilePath).href, import.meta.url);
+        const exported = (imported as Record<string, unknown>)[exportName];
 
         if (typeof exported !== "function") {
             throw new TypeError(`Could not load function ${exportName} from ${tempFilePath}`);

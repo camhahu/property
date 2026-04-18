@@ -1,19 +1,48 @@
 {
     "name": "holds",
-    "bin": {
-        "holds": "./src/cli.ts"
+    "version": "0.1.0",
+    "description": "Opinionated property and mutation testing for TypeScript business functions.",
+    "keywords": [
+        "mutation-testing",
+        "property-testing",
+        "testing",
+        "typescript"
+    ],
+    "homepage": "https://github.com/camhahu/property#readme",
+    "bugs": {
+        "url": "https://github.com/camhahu/property/issues"
     },
+    "license": "MIT",
+    "author": "Cameron Harder-Hutton <cameron@harderhutton.dev>",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/camhahu/property.git"
+    },
+    "bin": {
+        "holds": "./dist/cli.js"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
     "type": "module",
-    "module": "index.ts",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
-        ".": "./index.ts"
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
     },
     "scripts": {
         "lint": "oxlint --fix",
         "fmt": "oxfmt --write",
         "check": "bun run fmt && tsc --noEmit && bun run lint",
         "build": "tsdown",
-        "verify:example": "tsx ./src/cli.ts run ./examples/cart.holds.ts"
+        "verify:example": "tsx ./src/cli.ts run ./examples/cart.holds.ts",
+        "prepublishOnly": "bun run check && bun run build"
     },
     "dependencies": {
         "fast-check": "^4.6.0",
@@ -25,5 +54,8 @@
         "oxfmt": "^0.45.0",
         "oxlint": "^1.60.0",
         "tsdown": "^0.21.9"
+    },
+    "engines": {
+        "node": ">=20"
     }
 }

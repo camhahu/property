@@ -42,5 +42,11 @@
                 "max-nested-callbacks": "off",
             },
         },
+        {
+            "files": ["tsdown.config.ts"],
+            "rules": {
+                "import/no-default-export": "off",
+            },
+        },
     ],
 }

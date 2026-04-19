@@ -5,8 +5,8 @@ import type { CallTrace } from "./types.ts";
 export type FailureTextRequest = {
     calls: CallTrace[];
     inputName: string;
-    lawName: string;
-    lawSnippet?: string;
+    propertyName: string;
+    propertySnippet?: string;
     reason: string;
     sourceLocation: string;
 };
@@ -60,13 +60,13 @@ function formatCalls(calls: CallTrace[], inputName: string): string[] {
 export function renderFailureText({
     calls,
     inputName,
-    lawName,
-    lawSnippet,
+    propertyName,
+    propertySnippet,
     reason,
     sourceLocation,
 }: FailureTextRequest): string {
     const lines = [
-        `  ${lawName}`,
+        `  ${propertyName}`,
         "",
         ...formatCalls(calls, inputName),
         "",
@@ -74,8 +74,8 @@ export function renderFailureText({
         `  source: ${sourceLocation}`,
     ];
 
-    if (lawSnippet) {
-        lines.push("", `  law: ${lawSnippet}`);
+    if (propertySnippet) {
+        lines.push("", `  property: ${propertySnippet}`);
     }
 
     return lines.join("\n");

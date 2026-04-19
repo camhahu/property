@@ -8,7 +8,7 @@ function isSpecDefinition(value: unknown): value is SpecDefinition<unknown, unkn
     return (
         Boolean(value) &&
         typeof value === "object" &&
-        (value as { __brand?: string }).__brand === "holds-spec"
+        (value as { __brand?: string }).__brand === "property-spec"
     );
 }
 
@@ -17,7 +17,7 @@ function getExportedSpec(moduleExports: Record<string, unknown>): SpecDefinition
     const [definition] = definitions;
 
     if (definitions.length !== 1 || !definition) {
-        throw new Error("Spec modules must export exactly one holds spec.");
+        throw new Error("Spec modules must export exactly one property spec.");
     }
 
     return definition;

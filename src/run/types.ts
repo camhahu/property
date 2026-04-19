@@ -11,15 +11,15 @@ export type FailureDetails = {
     result?: unknown;
 };
 
-export type LawResult = {
+export type PropertyResult = {
     failure?: FailureDetails;
-    lawName: string;
+    propertyName: string;
     passed: boolean;
     runs: number;
 };
 
 export type PropertySuiteResult = {
-    firstFailure?: LawResult;
-    lawResults: LawResult[];
+    firstFailure?: PropertyResult;
+    propertyResults: PropertyResult[];
     passed: boolean;
 };

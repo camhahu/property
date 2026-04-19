@@ -4,18 +4,18 @@ import type ts from "typescript";
 
 import type { Shape } from "../types/shape.ts";
 import { createProgram } from "./create-program.ts";
-import { getLawSources, type LawSource } from "./law-sources.ts";
+import { getPropertySources, type PropertySource } from "./property-sources.ts";
 import { shapeFromType } from "./shape-from-type.ts";
 import { getTargetSymbol } from "./spec-call.ts";
 
-export type { LawSource } from "./law-sources.ts";
+export type { PropertySource } from "./property-sources.ts";
 
 export type AnalyzedSpec = {
     dependencyArgumentNames: Record<string, string[]>;
     dependencyParameterName?: string;
     inputName: string;
     inputShape: Shape;
-    lawSources: Record<string, LawSource>;
+    propertySources: Record<string, PropertySource>;
     specFilePath: string;
     targetFilePath: string;
     targetName: string;
@@ -200,7 +200,7 @@ export function analyzeSpecFile(specFilePath: string): AnalyzedSpec {
         dependencyParameterName: inputAnalysis.dependencyParameterName,
         inputName: inputAnalysis.inputName,
         inputShape: inputAnalysis.inputShape,
-        lawSources: getLawSources(checker, sourceFile),
+        propertySources: getPropertySources(checker, sourceFile),
         specFilePath,
         targetFilePath: path.resolve(targetSourceFile.fileName),
         targetName: targetSymbol.getName(),

@@ -22,40 +22,41 @@ export type MockDefinition<TInput> = MockExpectation<TInput> | MockHandler<TInpu
 
 export type Given<TInput> = Record<string, MockDefinition<TInput>>;
 
-export type Holds<TInput, TResult> = (context: LawContext<TInput, TResult>) => Awaitable<boolean>;
+export type Holds<TInput, TResult> = (
+    context: PropertyContext<TInput, TResult>,
+) => Awaitable<boolean>;
 
-export type LawContext<TInput, TResult> = InputContext<TInput> & {
+export type PropertyContext<TInput, TResult> = InputContext<TInput> & {
     result: TResult;
 };
 
-export type LawDefinition<TInput, TResult> = {
+export type PropertyDefinition<TInput, TResult> = {
     holds: Holds<TInput, TResult>;
     given?: Given<TInput>;
     where?: (context: InputContext<TInput>) => Awaitable<boolean>;
 };
 
-export type CollectedLaw<TInput, TResult> = LawDefinition<TInput, TResult> & {
+export type CollectedProperty<TInput, TResult> = PropertyDefinition<TInput, TResult> & {
     name: string;
 };
 
 export type SpecBuilder<TInput, TResult> = {
-    section: (name: string, build: () => void) => void;
-    law: (name: string, definition: LawDefinition<TInput, TResult>) => void;
+    property: (name: string, definition: PropertyDefinition<TInput, TResult>) => void;
 };
 
 export type SpecDefinition<TInput, TResult> = {
-    readonly __brand: "holds-spec";
+    readonly __brand: "property-spec";
     readonly target: (...inputs: any[]) => Awaitable<TResult>;
-    readonly laws: CollectedLaw<TInput, TResult>[];
+    readonly properties: CollectedProperty<TInput, TResult>[];
 };
-
-export function spec<TInput, TDependencies, TResult>(
-    target: (input: TInput, dependencies: TDependencies) => Awaitable<TResult>,
-    build: (builder: SpecBuilder<TInput, TResult>) => void,
-): SpecDefinition<TInput, TResult>;
 
 export function spec<TInput, TResult>(
     target: (input: TInput) => Awaitable<TResult>,
+    build: (builder: SpecBuilder<TInput, TResult>) => void,
+): SpecDefinition<TInput, TResult>;
+
+export function spec<TInput, TDependencies, TResult>(
+    target: (input: TInput, dependencies: TDependencies) => Awaitable<TResult>,
     build: (builder: SpecBuilder<TInput, TResult>) => void,
 ): SpecDefinition<TInput, TResult>;
 
@@ -63,36 +64,28 @@ export function spec(
     target: (...inputs: any[]) => Awaitable<any>,
     build: (builder: SpecBuilder<any, any>) => void,
 ): SpecDefinition<any, any> {
-    const laws: CollectedLaw<any, any>[] = [];
-    const sections: string[] = [];
+    const properties: CollectedProperty<any, any>[] = [];
+    const prefix = buildNamespacePrefix(target);
 
     build({
-        section(name, next) {
-            sections.push(name);
-
-            try {
-                next();
-            } finally {
-                sections.pop();
-            }
-        },
-        law(name, definition) {
-            let fullName = name;
-
-            if (sections.length > 0) {
-                fullName = `${sections.join(" / ")} / ${name}`;
-            }
-
-            laws.push({
-                ...definition,
-                name: fullName,
-            });
+        property(name, definition) {
+            properties.push({ ...definition, name: `${prefix}${name}` });
         },
     });
 
     return {
-        __brand: "holds-spec",
-        laws,
+        __brand: "property-spec",
+        properties,
         target,
     };
+}
+
+function buildNamespacePrefix(target: (...inputs: any[]) => Awaitable<any>): string {
+    const name = target.name.trim();
+
+    if (!name) {
+        return "";
+    }
+
+    return `${name} / `;
 }

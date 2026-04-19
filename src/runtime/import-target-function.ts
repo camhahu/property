@@ -12,7 +12,7 @@ type ImportTargetFunctionRequest = {
 };
 
 function getTempFilePath(sourceFilePath: string, id: string): string {
-    return path.join(path.dirname(sourceFilePath), `.holds-${id}.ts`);
+    return path.join(path.dirname(sourceFilePath), `.property-${id}.ts`);
 }
 
 async function writeTargetModule({

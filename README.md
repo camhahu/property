@@ -1,72 +1,145 @@
-# holds
+# property
 
-`holds` is an opinionated property and mutation testing tool for exported TypeScript business functions.
+Opinionated property and mutation testing for TypeScript business functions.
 
-The intended authoring model is:
+`property` generates inputs from your TypeScript types, checks properties you declare about the function's behavior, then mutates the function's source to verify those properties actually detect bugs.
+
+## Install
+
+```bash
+npm install --save-dev property
+```
+
+## Quick start
+
+Say you have a function you want to pin down:
 
 ```ts
-import { spec } from "holds";
+// discount.ts
+export function discountFor(subtotal: number, percent: number): number {
+    const bounded = Math.min(Math.max(percent, 0), 100);
+    return Math.round((subtotal * bounded) / 100);
+}
+```
 
-import { calculateCartSummary } from "./cart.ts";
+Write a spec next to it:
 
-export const cartSpec = spec(calculateCartSummary, ({ law, section }) => {
-    section("totals", () => {
-        law("item count matches quantities", {
-            holds: ({ input, result }) =>
-                result.itemCount ===
-                input.cart.items.reduce((count, item) => count + item.quantity, 0),
-        });
+```ts
+// discount.property.ts
+import { spec } from "property";
+
+import { discountFor } from "./discount.ts";
+
+export const discountSpec = spec(discountFor, ({ property }) => {
+    property("discount is never negative", {
+        holds: ({ result }) => result >= 0,
+    });
+
+    property("discount never exceeds the subtotal", {
+        holds: ({ input, result }) => result <= input,
     });
 });
 ```
 
-## Vision
+Run it:
 
-- Specs target real production exports.
-- Inputs come from TypeScript types when they are plain data.
-- Dependencies are injected as data from `given`, not through test-only wrappers.
-- Mutation results help show whether the laws actually bite.
+```bash
+npx property run ./discount.property.ts
+```
+
+```
+discount.property.ts
+  discountFor    2 properties
+
+    ✓ discountFor / discount is never negative    250 inputs
+    ✓ discountFor / discount never exceeds the subtotal    250 inputs
+
+  Mutations
+    killed 3/3
+
+  confidence: 100%
+```
+
+## How it works
+
+`property` takes one exported function as its target. It reads the TypeScript types of the function's input, generates random values against those types, and runs each property over many inputs. When the property run passes, it mutates your function's source (for example, flipping a comparison operator or removing a guard clause) and reruns the properties against each mutated version. A mutation that survives means the properties weren't specific enough to catch that change.
+
+Properties are automatically namespaced by the target function's name so output stays scannable across specs.
+
+## Spec shape
+
+```ts
+spec(target, ({ property }) => {
+    property("property name", {
+        given: {
+            // optional: override dependencies
+        },
+        where: ({ input }) => /* optional filter */ true,
+        holds: ({ input, result }) => /* must be true */ true,
+    });
+});
+```
+
+- `target` — the function under test. Its name becomes the output namespace.
+- `property` — a named property with a `holds` predicate.
+- `where` — filter inputs the property should apply to.
+- `given` — override dependencies for this property (see below).
+
+## Dependencies
+
+If your function takes a second argument that's a bag of dependencies, `property` detects it and mocks each one from the types:
+
+```ts
+type Services = {
+    fetchCoupon: (code: string) => Promise<Coupon | null>;
+};
+
+export async function checkout(input: CheckoutInput, services: Services) {
+    // ...
+}
+```
+
+Override individual dependencies per property with `given`:
+
+```ts
+property("100 percent coupon zeroes the subtotal", {
+    where: ({ input }) => Boolean(input.couponCode),
+    given: {
+        fetchCoupon: { type: "percent", value: 100 },
+    },
+    holds: ({ result }) => result.discount === result.subtotal,
+});
+```
+
+A `given` value can be a plain value, a handler function, or an object with `return` / `returns` and a `where` predicate for call-argument matching.
+
+A richer end-to-end example lives in [`examples/cart.property.ts`](./examples/cart.property.ts).
+
+## Reports
+
+**Property output** lists each property, the number of inputs run, and the first failing counterexample if any.
+
+**Mutation output** shows `killed N/M` and a `confidence` percentage. If the target contains no currently supported mutation candidates, it reports `confidence: unavailable` rather than inventing a score.
 
 ## Scope
 
-`holds` is intentionally narrow.
+`property` is intentionally narrow. It fits best when:
 
-- Best fit: exported functions with one business-input parameter and an optional second dependency bag.
-- Best fit inputs: plain data like objects, arrays, tuples, records, unions, literals, booleans, numbers, strings, `null`, `undefined`, and `unknown`.
-- Best fit dependencies: functions grouped under the second parameter and overridden with `given`.
+- The function has one business-input parameter and an optional dependency bag.
+- The input is plain data: objects, arrays, tuples, records, unions, literals, booleans, numbers, strings, `null`, `undefined`, `unknown`.
+- Dependencies are grouped under a single object parameter.
 
-Today it does not try to be a general-purpose test framework or a universal TypeScript value generator.
+Today, `property` does not:
 
-- Recursive input types are not supported.
-- Input generation stays biased toward small, readable values.
-- Mutation confidence only reflects the mutations this repo currently knows how to generate.
+- Support recursive input types.
+- Generate large or exotic values — inputs stay small and readable.
+- Cover every possible mutation. Confidence reflects the currently supported mutation candidates.
 
-## Commands
+## Requirements
 
-Install dependencies:
+- Node.js 20+
+- A TypeScript project (spec files are loaded with `tsx`)
 
-```bash
-bun install
-```
+## License
 
-Run the example spec:
-
-```bash
-bun run ./src/cli.ts run ./examples/cart.holds.ts
-```
-
-Run repo checks:
-
-```bash
-bun run check
-```
-
-## Notes On Reports
-
-- Property output shows each law and the first failing counterexample.
-- Mutation output is only meaningful for supported mutation candidates.
-- `confidence: unavailable` means the target did not contain any currently supported mutation candidates, not that the spec is perfect.
-
-## Example
-
-See `examples/cart.ts` and `examples/cart.holds.ts` for the canonical style.
+MIT

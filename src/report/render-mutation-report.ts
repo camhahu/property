@@ -17,11 +17,11 @@ export function renderMutationReport(results: MutationResult[]): string {
     const lines = ["", "  Mutations", `    killed ${killed.length}/${results.length}`];
 
     if (survived.length > 0) {
-        lines.push("", "  Weak laws");
+        lines.push("", "  Weak properties");
         lines.push(
             ...survived.flatMap((mutant) => [
                 `    ${mutant.id}: ${mutant.description}`,
-                "    survived all laws",
+                "    survived all properties",
             ]),
         );
     }

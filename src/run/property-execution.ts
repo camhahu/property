@@ -1,23 +1,29 @@
-import type { Awaitable, Given, InputContext, LawContext, LawDefinition } from "../public/spec.ts";
+import type {
+    Awaitable,
+    Given,
+    InputContext,
+    PropertyContext,
+    PropertyDefinition,
+} from "../public/spec.ts";
 import { createDependencyBag } from "./dependencies.ts";
 import type { CallTrace, FailureDetails } from "./types.ts";
 
-type LawExecution<TInput, TResult> = {
+type PropertyExecution<TInput, TResult> = {
     dependencyArgumentNames: Record<string, string[]>;
     dependencyParameterName?: string;
     given: Given<TInput>;
     input: TInput;
-    law: LawDefinition<TInput, TResult> & { name: string };
+    property: PropertyDefinition<TInput, TResult> & { name: string };
     target: (...inputs: unknown[]) => Awaitable<TResult>;
 };
 
-class LawFailure extends Error {
+class PropertyFailure extends Error {
     readonly details: FailureDetails;
 
     constructor(details: FailureDetails) {
         super(details.reason);
         this.details = details;
-        this.name = "LawFailure";
+        this.name = "PropertyFailure";
     }
 }
 
@@ -25,32 +31,34 @@ function toInputContext<TInput>(input: TInput): InputContext<TInput> {
     return { input };
 }
 
-async function shouldSkipLaw<TInput, TResult>({
+async function shouldSkipProperty<TInput, TResult>({
     input,
-    law,
-}: Pick<LawExecution<TInput, TResult>, "input" | "law">): Promise<boolean> {
-    if (!law.where) {
+    property,
+}: Pick<PropertyExecution<TInput, TResult>, "input" | "property">): Promise<boolean> {
+    if (!property.where) {
         return false;
     }
 
-    return !(await law.where(toInputContext(input)));
+    return !(await property.where(toInputContext(input)));
 }
 
-export function getGiven<TInput, TResult>(law: LawDefinition<TInput, TResult>): Given<TInput> {
-    return law.given ?? {};
+export function getGiven<TInput, TResult>(
+    property: PropertyDefinition<TInput, TResult>,
+): Given<TInput> {
+    return property.given ?? {};
 }
 
-function toLawContext<TInput, TResult>({
+function toPropertyContext<TInput, TResult>({
     input,
     result,
 }: {
     input: TInput;
     result: TResult;
-}): LawContext<TInput, TResult> {
+}): PropertyContext<TInput, TResult> {
     return { input, result };
 }
 
-function toLawFailure({
+function toPropertyFailure({
     calls,
     error,
     input,
@@ -58,8 +66,8 @@ function toLawFailure({
     calls: CallTrace[];
     error: unknown;
     input: unknown;
-}): LawFailure {
-    if (error instanceof LawFailure) {
+}): PropertyFailure {
+    if (error instanceof PropertyFailure) {
         return error;
     }
 
@@ -69,7 +77,7 @@ function toLawFailure({
         reason = error.message;
     }
 
-    return new LawFailure({ calls, input, reason });
+    return new PropertyFailure({ calls, input, reason });
 }
 
 async function invokeTarget<TInput, TResult>({
@@ -113,18 +121,18 @@ async function invokeTarget<TInput, TResult>({
     }
 }
 
-export async function executeLaw<TInput, TResult>({
+export async function executeProperty<TInput, TResult>({
     dependencyArgumentNames,
     dependencyParameterName,
     given,
     input,
-    law,
+    property,
     target,
-}: LawExecution<TInput, TResult>): Promise<void> {
+}: PropertyExecution<TInput, TResult>): Promise<void> {
     const calls: CallTrace[] = [];
 
     try {
-        if (await shouldSkipLaw({ input, law })) {
+        if (await shouldSkipProperty({ input, property })) {
             return;
         }
 
@@ -136,12 +144,12 @@ export async function executeLaw<TInput, TResult>({
             input,
             target,
         });
-        const passed = await law.holds(toLawContext({ input, result }));
+        const passed = await property.holds(toPropertyContext({ input, result }));
 
         if (!passed) {
-            throw new LawFailure({ calls, input, reason: "Law returned false.", result });
+            throw new PropertyFailure({ calls, input, reason: "Law returned false.", result });
         }
     } catch (error) {
-        throw toLawFailure({ calls, error, input });
+        throw toPropertyFailure({ calls, error, input });
     }
 }

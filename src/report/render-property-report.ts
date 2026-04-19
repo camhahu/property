@@ -1,28 +1,28 @@
 import path from "node:path";
 
-import type { LawSource } from "../load/analyze-spec-file.ts";
+import type { PropertySource } from "../load/analyze-spec-file.ts";
 import { formatFailure } from "../run/format-failure.ts";
 import type { PropertySuiteResult } from "../run/properties.ts";
 
 type PropertyReportRequest = {
     inputName: string;
-    lawSources: Record<string, LawSource>;
+    propertySources: Record<string, PropertySource>;
     result: PropertySuiteResult;
     specFilePath: string;
     targetName: string;
 };
 
 function getPropertyLines(result: PropertySuiteResult): string[] {
-    return result.lawResults.map((lawResult) => {
-        if (lawResult.passed) {
-            return `    ✓ ${lawResult.lawName}    ${lawResult.runs} inputs`;
+    return result.propertyResults.map((propertyResult) => {
+        if (propertyResult.passed) {
+            return `    ✓ ${propertyResult.propertyName}    ${propertyResult.runs} inputs`;
         }
 
-        return `    ✗ ${lawResult.lawName}    failed after ${lawResult.runs} inputs`;
+        return `    ✗ ${propertyResult.propertyName}    failed after ${propertyResult.runs} inputs`;
     });
 }
 
-function getFailureLines({ inputName, lawSources, result }: PropertyReportRequest): string[] {
+function getFailureLines({ inputName, propertySources, result }: PropertyReportRequest): string[] {
     if (!result.firstFailure?.failure) {
         return [];
     }
@@ -34,24 +34,24 @@ function getFailureLines({ inputName, lawSources, result }: PropertyReportReques
         formatFailure({
             failure: result.firstFailure.failure,
             inputName,
-            lawName: result.firstFailure.lawName,
-            lawSources,
+            propertyName: result.firstFailure.propertyName,
+            propertySources,
         }),
     ];
 }
 
 export function renderPropertyReport({
     inputName,
-    lawSources,
+    propertySources,
     result,
     specFilePath,
     targetName,
 }: PropertyReportRequest): string {
     return [
         path.relative(process.cwd(), specFilePath),
-        `  ${targetName}    ${result.lawResults.length} laws`,
+        `  ${targetName}    ${result.propertyResults.length} properties`,
         "",
         ...getPropertyLines(result),
-        ...getFailureLines({ inputName, lawSources, result, specFilePath, targetName }),
+        ...getFailureLines({ inputName, propertySources, result, specFilePath, targetName }),
     ].join("\n");
 }

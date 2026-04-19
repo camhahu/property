@@ -1,39 +1,39 @@
-import type { LawSource } from "../load/analyze-spec-file.ts";
+import type { PropertySource } from "../load/analyze-spec-file.ts";
 import { renderFailureText } from "./render-failure-text.ts";
 import type { FailureDetails } from "./types.ts";
 
 type FailureFormatRequest = {
-    lawSources: Record<string, LawSource>;
+    propertySources: Record<string, PropertySource>;
     failure: FailureDetails;
     inputName: string;
-    lawName: string;
+    propertyName: string;
 };
 
 function getLawSection(
-    lawSources: Record<string, LawSource>,
-    lawName: string,
+    propertySources: Record<string, PropertySource>,
+    propertyName: string,
 ): { location: string; snippet?: string } {
-    const lawSource = lawSources[lawName];
+    const propertySource = propertySources[propertyName];
 
     return {
-        location: lawSource?.location ?? "unknown",
-        snippet: lawSource?.snippet,
+        location: propertySource?.location ?? "unknown",
+        snippet: propertySource?.snippet,
     };
 }
 
 export function formatFailure({
     failure,
     inputName,
-    lawName,
-    lawSources,
+    propertyName,
+    propertySources,
 }: FailureFormatRequest): string {
-    const lawSection = getLawSection(lawSources, lawName);
+    const lawSection = getLawSection(propertySources, propertyName);
 
     return renderFailureText({
         calls: failure.calls,
         inputName,
-        lawName,
-        lawSnippet: lawSection.snippet,
+        propertyName,
+        propertySnippet: lawSection.snippet,
         reason: failure.reason,
         sourceLocation: lawSection.location,
     });

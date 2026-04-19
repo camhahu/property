@@ -1,6 +1,6 @@
 import ts from "typescript";
 
-import { resolveExpression, resolveFunctionLike } from "./static-reference.ts";
+import { resolveExpression } from "./static-reference.ts";
 
 type ResolvedArgumentRequest = {
     call: ts.CallExpression;
@@ -45,20 +45,4 @@ export function getObjectArgument(
     }
 
     return undefined;
-}
-
-export function getCallbackArgument(request: ResolvedArgumentRequest): ts.FunctionLikeDeclaration {
-    const argument = request.call.arguments[request.index];
-
-    if (!argument) {
-        throw new Error("section() must receive a callback.");
-    }
-
-    const declaration = resolveFunctionLike(request.checker, argument);
-
-    if (!declaration) {
-        throw new Error("section() must receive a statically analyzable callback.");
-    }
-
-    return declaration;
 }

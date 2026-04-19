@@ -1,5 +1,5 @@
 {
-    "name": "holds",
+    "name": "property",
     "version": "0.1.0",
     "description": "Opinionated property and mutation testing for TypeScript business functions.",
     "keywords": [
@@ -19,7 +19,7 @@
         "url": "git+https://github.com/camhahu/property.git"
     },
     "bin": {
-        "holds": "./dist/cli.js"
+        "property": "./dist/cli.js"
     },
     "files": [
         "dist",
@@ -41,7 +41,7 @@
         "fmt": "oxfmt --write",
         "check": "bun run fmt && tsc --noEmit && bun run lint",
         "build": "tsdown",
-        "verify:example": "tsx ./src/cli.ts run ./examples/cart.holds.ts",
+        "verify:example": "tsx ./src/cli.ts run ./examples/cart.property.ts",
         "prepublishOnly": "bun run check && bun run build"
     },
     "dependencies": {

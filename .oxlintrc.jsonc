@@ -28,7 +28,7 @@
     },
     "overrides": [
         {
-            "files": ["**/*.holds.ts"],
+            "files": ["**/*.property.ts"],
             "rules": {
                 "complexity": "off",
                 "max-lines-per-function": "off",

@@ -9,7 +9,7 @@ import { renderMutationReport, renderPropertyReport } from "./report/text.ts";
 import { runPropertySuite } from "./run/properties.ts";
 
 function usage(): never {
-    console.error("Usage: holds run <spec-file>");
+    console.error("Usage: property run <spec-file>");
     process.exit(1);
     throw new Error("unreachable");
 }
@@ -22,7 +22,7 @@ async function run(specFilePath: string): Promise<void> {
     console.log(
         renderPropertyReport({
             inputName: analyzedSpec.inputName,
-            lawSources: analyzedSpec.lawSources,
+            propertySources: analyzedSpec.propertySources,
             result: propertyResult,
             specFilePath: analyzedSpec.specFilePath,
             targetName: analyzedSpec.targetName,

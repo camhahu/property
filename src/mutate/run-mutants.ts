@@ -68,7 +68,7 @@ async function runMutantCandidate({
         description: candidate.description,
         id,
         killed: !propertyResult.passed,
-        killedBy: propertyResult.firstFailure?.lawName,
+        killedBy: propertyResult.firstFailure?.propertyName,
     };
 }
 

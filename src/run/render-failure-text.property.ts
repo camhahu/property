@@ -42,6 +42,14 @@ function nonEmptyNestedResultKey(
     return undefined;
 }
 
+function isUnquotedIdentifierKey(key: string): boolean {
+    return /^[A-Za-z_$][\w$]*$/.test(key);
+}
+
+function disjointKeys(keys: string[]): string[] {
+    return keys.filter((key) => !keys.some((other) => other !== key && other.includes(key)));
+}
+
 function renderedResultKeys(input: Parameters<typeof renderFailureText>[0]): string[] {
     const objectValue = firstResultObject(input);
 
@@ -49,17 +57,11 @@ function renderedResultKeys(input: Parameters<typeof renderFailureText>[0]): str
         return [];
     }
 
-    return Object.keys(objectValue).filter((key) => /^[A-Za-z0-9_]+$/.test(key));
+    return disjointKeys(Object.keys(objectValue).filter(isUnquotedIdentifierKey));
 }
 
-function unsortedSimpleResultKeys(input: Parameters<typeof renderFailureText>[0]): string[] {
-    const objectValue = firstResultObject(input);
-
-    if (!objectValue) {
-        return [];
-    }
-
-    const keys = Object.keys(objectValue).filter((key) => /^[a-z]+$/.test(key));
+function unsortedRenderedResultKeys(input: Parameters<typeof renderFailureText>[0]): string[] {
+    const keys = renderedResultKeys(input);
     const sorted = [...keys].toSorted();
 
     if (keys.join("|") === sorted.join("|")) {
@@ -137,10 +139,10 @@ export const renderFailureTextSpec = spec(renderFailureText, ({ property }) => {
         },
     });
 
-    property("sorts simple object result keys before rendering", {
-        where: ({ input }) => unsortedSimpleResultKeys(input).length > 1,
+    property("sorts object result keys before rendering", {
+        where: ({ input }) => unsortedRenderedResultKeys(input).length > 1,
         holds: ({ input, result }) =>
-            keysAppearInOrder(firstResultSection(result), unsortedSimpleResultKeys(input)),
+            keysAppearInOrder(firstResultSection(result), unsortedRenderedResultKeys(input)),
     });
 
     property("renders nested result values beyond the first level", {
